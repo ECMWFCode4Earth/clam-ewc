@@ -1,2 +1,324 @@
-# clam-ewc
-2026 - Challenge 31 - CLAM - Cloud-computing based template for NWP Local Area Model
+# CLAM WRF/WPS Template for the European Weather Cloud
+
+This repository provides a semi-automated installation workflow for building a reproducible WRF/WPS environment on Ubuntu 24.04 virtual machines, with a primary focus on the European Weather Cloud.
+
+The work is part of the Code for Earth 2026 project **CLAM – Cloud-computing based template for NWP Local Area Model**.
+
+The main goal of this repository is to provide a reusable and documented template that helps users install, configure, compile and test a local-area numerical weather prediction environment with WRF and WPS.
+
+## Target platform
+
+The scripts were developed and tested primarily on:
+
+* European Weather Cloud virtual machines
+* Ubuntu 24.04
+* Intel oneAPI compiler suite
+* WRF 4.6.1
+* WPS 4.6.0
+
+The default installation directory is:
+
+```bash
+$HOME/ARW
+```
+
+If needed, users can install the ARW software stack on another disk or mount point by setting the `ARW_ROOT` environment variable before running the relevant scripts.
+
+Example:
+
+```bash
+ARW_ROOT=/data/ARW ./scripts/02_install_arw_third_party_libs.sh
+ARW_ROOT=/data/ARW ./scripts/03_install_wrf_wps.sh
+```
+
+This is optional. The default location remains `$HOME/ARW`.
+
+## Installation workflow
+
+The installation is split into four main steps:
+
+```bash
+chmod +x scripts/*.sh
+
+./scripts/00_install_system_packages.sh
+./scripts/01_install_intel_oneapi.sh
+./scripts/02_install_arw_third_party_libs.sh
+./scripts/03_install_wrf_wps.sh
+```
+
+Each script performs one clearly defined part of the setup.
+
+## Script overview
+
+### `00_install_system_packages.sh`
+
+This script prepares a fresh Ubuntu 24.04 system for compiling WRF, WPS and their required dependencies.
+
+The script installs the required Ubuntu packages, including:
+
+* C, C++ and Fortran development tools
+* GNU compilers and standard build utilities
+* shell tools required by WRF/WPS
+* archive and compression utilities
+* system development headers
+* `wget`, `curl`, `git`, `rsync` and other useful installation tools
+
+This script should be run first on a fresh VM.
+
+### `01_install_intel_oneapi.sh`
+
+This script installs the Intel oneAPI compiler environment used for building the WRF/WPS software stack.
+
+The workflow was tested with the Intel oneAPI Toolkit 2026 offline installer. The installer can either be downloaded by the script or provided manually if it already exists on the system.
+
+A typical offline installer filename is:
+
+```text
+intel-oneapi-toolkit-2026.0.0.198_offline.sh
+```
+
+If the Intel installer is executed with `sudo`, the system-wide installation path is usually:
+
+```bash
+/opt/intel/oneapi
+```
+
+If it is executed as a normal user, the user installation path is usually:
+
+```bash
+$HOME/intel/oneapi
+```
+
+The later scripts detect both common locations automatically by looking for:
+
+```bash
+/opt/intel/oneapi/setvars.sh
+$HOME/intel/oneapi/setvars.sh
+```
+
+After Intel oneAPI is installed, the script verifies that the required compilers and MPI compiler wrappers are available:
+
+```bash
+icx
+icpx
+ifx
+mpiicx
+mpiicpx
+mpiifx
+```
+
+### `02_install_arw_third_party_libs.sh`
+
+This script downloads, builds and installs the third-party libraries required by WRF and WPS.
+
+The libraries are installed under:
+
+```bash
+$ARW_ROOT/LIBRARIES
+```
+
+By default this means:
+
+```bash
+$HOME/ARW/LIBRARIES
+```
+
+The script builds the following packages:
+
+* zlib 1.3.1
+* libpng 1.6.43
+* JasPer 1.900.1
+* HDF5 1.14.6
+* netCDF-C 4.9.2
+* netCDF-Fortran 4.6.1
+
+JasPer 1.900.1 is installed separately under:
+
+```bash
+$ARW_ROOT/JASPER-1.900.1
+```
+
+This older JasPer version is used because it provides compatibility with the WPS `ungrib.exe` build requirements.
+
+The script uses Intel compilers and Intel MPI compiler wrappers:
+
+```bash
+CC=icx
+CXX=icpx
+FC=ifx
+
+MPICC=mpiicx
+MPICXX=mpiicpx
+MPIFC=mpiifx
+```
+
+HDF5 and NetCDF are built with parallel support using Intel MPI wrappers.
+
+The script also creates a reusable environment file:
+
+```bash
+$ARW_ROOT/arw_intel_env.sh
+```
+
+This file can be sourced before compiling or running WRF/WPS:
+
+```bash
+source $HOME/ARW/arw_intel_env.sh
+```
+
+The environment file defines compiler variables, MPI compiler wrappers, NetCDF/HDF5 paths, JasPer paths, WPS compression variables and WRF runtime settings.
+
+### `03_install_wrf_wps.sh`
+
+This script configures and compiles WRF 4.6.1 and WPS 4.6.0.
+
+It assumes that the previous third-party library installation step was completed successfully and that the following file exists:
+
+```bash
+$HOME/ARW/arw_intel_env.sh
+```
+
+The script builds:
+
+* WRF 4.6.1
+* WPS 4.6.0
+
+The WRF source code is cloned from the official WRF GitHub repository using:
+
+```bash
+git clone --branch v4.6.1 --recursive https://github.com/wrf-model/WRF.git
+```
+
+The WPS source code is cloned using:
+
+```bash
+git clone --branch v4.6.0 https://github.com/wrf-model/WPS.git
+```
+
+For WRF, the script is designed for a distributed-memory build:
+
+```text
+Linux x86_64, Intel compiler, dmpar
+```
+
+When WRF asks for the nesting option, the expected choice is:
+
+```text
+basic
+```
+
+After configuration, the script forces Intel MPI compiler wrappers in `configure.wrf`:
+
+```bash
+DM_FC = mpiifx
+DM_CC = mpiicx
+```
+
+This avoids possible cases where generic `mpif90` or `mpicc` wrappers point to GNU backends instead of Intel backends.
+
+The WRF build keeps `-O3` optimization but removes the Intel `-ip` option:
+
+```bash
+sed -i 's/ -ip / /g' configure.wrf
+```
+
+This choice was made because `-ip` may cause failures during the WRF build on some VM configurations.
+
+The final WRF compilation is performed with:
+
+```bash
+./compile -j 1 em_real
+```
+
+The script then checks that the main WRF executables were created:
+
+```bash
+main/real.exe
+main/wrf.exe
+```
+
+For WPS, the script uses the serial build configuration:
+
+```text
+Linux x86_64, Intel compiler, serial
+```
+
+WPS is usually built serial, while WRF itself is built with MPI.
+
+The script modifies `configure.wps` so that it points to the compiled WRF directory and uses JasPer 1.900.1, libpng and zlib for `ungrib.exe` compression support:
+
+```bash
+COMPRESSION_LIBS = -L$ARW_ROOT/JASPER-1.900.1/lib -ljasper -L$ARW_ROOT/LIBRARIES/lib -lpng -lz
+COMPRESSION_INC  = -I$ARW_ROOT/JASPER-1.900.1/include -I$ARW_ROOT/LIBRARIES/include
+```
+
+After compilation, the script verifies that the WPS executables exist:
+
+```bash
+geogrid.exe
+ungrib.exe
+metgrid.exe
+```
+
+## Expected result
+
+After all installation scripts complete successfully, the user should have:
+
+```bash
+$HOME/ARW/WRF-4.6.1
+$HOME/ARW/WPS-4.6.0
+$HOME/ARW/LIBRARIES
+$HOME/ARW/JASPER-1.900.1
+$HOME/ARW/arw_intel_env.sh
+```
+
+The main executables should be available as:
+
+```bash
+$HOME/ARW/WRF-4.6.1/main/wrf.exe
+$HOME/ARW/WRF-4.6.1/main/real.exe
+
+$HOME/ARW/WPS-4.6.0/geogrid.exe
+$HOME/ARW/WPS-4.6.0/ungrib.exe
+$HOME/ARW/WPS-4.6.0/metgrid.exe
+```
+
+Before using the installed environment, source:
+
+```bash
+source $HOME/ARW/arw_intel_env.sh
+```
+
+## Notes on user interaction
+
+The installation is largely automated, but the WRF and WPS configuration scripts still ask the user to select the correct build options interactively.
+
+For WRF, choose:
+
+```text
+Linux x86_64, Intel compiler, dmpar
+basic nesting
+```
+
+For WPS, choose:
+
+```text
+Linux x86_64, Intel compiler, serial
+```
+
+## Current status
+
+This is an initial working version of the CLAM WRF/WPS installation workflow.
+
+The repository will be extended with:
+
+* example `namelist.wps` and `namelist.input` files
+* WPS and WRF run scripts
+* benchmark results for different EWC VM configurations
+* documentation for domain setup and workflow testing
+* notes on performance, CPU scaling and I/O quilting
+
+## Disclaimer
+
+This repository is intended as a practical installation and testing template for the CLAM project. It does not replace the official WRF, WPS, Intel oneAPI, HDF5 or NetCDF documentation. Instead, it provides a tested and reproducible starting point for building WRF/WPS on the European Weather Cloud.
+
