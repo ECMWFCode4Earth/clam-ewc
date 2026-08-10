@@ -107,12 +107,15 @@ ifx --version | head -1
 # Create reusable environment script
 # ------------------------------------------------------------
 
-cat > "${ARW_ROOT}/arw_intel_env.sh" <<'EOF'
+cat > "${ARW_ROOT}/arw_intel_env.sh" <<EOF
 #!/bin/bash
 
 source /opt/intel/oneapi/setvars.sh --force
 
-export ARW_ROOT=${HOME}/ARW
+export ARW_ROOT=${ARW_ROOT}
+EOF
+
+cat >> "${ARW_ROOT}/arw_intel_env.sh" <<'EOF'
 export DIR=${ARW_ROOT}/LIBRARIES
 export SRC=${ARW_ROOT}/src
 export TESTS=${ARW_ROOT}/TESTS
