@@ -25,7 +25,7 @@ set -eo pipefail
 #   - WPS uses JasPer 1.900.1 for ungrib.exe
 # ============================================================
 
-export ARW_ROOT="${HOME}/ARW"
+export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
 export DIR="${ARW_ROOT}/LIBRARIES"
 export SRC="${ARW_ROOT}/src"
 
