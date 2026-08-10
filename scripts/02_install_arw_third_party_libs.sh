@@ -25,7 +25,7 @@ set -eo pipefail
 #   $HOME/ARW/JASPER-1.900.1
 # ============================================================
 
-export ARW_ROOT="${HOME}/ARW"
+export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
 export DIR="${ARW_ROOT}/LIBRARIES"
 export SRC="${ARW_ROOT}/src"
 export TESTS="${ARW_ROOT}/TESTS"
