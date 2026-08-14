@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -ex
+
+date
+
+WRF=_WRF_
+RUN_DIR=_RUN_DIR_
+cd $RUN_DIR
+rm -f log.*
+
+WPS=$WRF/WPS
+
+ENV_FILE="$WRF/arw_intel_env.sh"
+
+source "$ENV_FILE"
+
+export OMP_NUM_THREADS=1
+export OMP_STACKSIZE=512M
+export KMP_STACKSIZE=512M
+
+ln -sf $WPS/ungrib/Variable_Tables/Vtable.ECMWF Vtable
+$WPS/link_grib.csh ECMWF_*
+$WPS/ungrib.exe
+
+ln -sf $WPS/geogrid/GEOGRID.TBL.ARW GEOGRID.TBL
+rm -f geogrid.log.* geo_em.d??.*
+$WPS/geogrid.exe
+
+ln -sf $WPS/metgrid/METGRID.TBL.ARW METGRID.TBL
+rm -f metgrid.log.* met_em.d??.*
+$WPS/metgrid.exe
+
+bash run_real.sh
+
+echo "$0 done."
