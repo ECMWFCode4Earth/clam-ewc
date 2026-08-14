@@ -40,10 +40,11 @@ The installation is split into four main steps:
 ```bash
 chmod +x scripts/*.sh
 
-./scripts/00_install_system_packages.sh
-./scripts/01_install_intel_oneapi.sh
-./scripts/02_install_arw_third_party_libs.sh
-./scripts/03_install_wrf_wps.sh
+./build_scripts/00_install_system_packages.sh
+./build_scripts/01_install_intel_oneapi.sh
+./build_scripts/02_install_arw_third_party_libs.sh
+./build_scripts/03_install_wrf_wps.sh
+./build_scripts/04_download_wps_geog.sh
 ```
 
 Each script performs one clearly defined part of the setup.
