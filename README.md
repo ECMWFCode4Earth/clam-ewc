@@ -109,7 +109,11 @@ mpiifx
 
 ### `02_install_arw_third_party_libs.sh`
 
-This script downloads, builds and installs the third-party libraries required by WRF and WPS.
+This script downloads, builds and installs the third-party libraries required by WRF and WPS. On EWC we recommend running it with:
+
+```bash
+ARW_ROOT=/data/ARW ./scripts/02_install_arw_third_party_libs.sh
+```
 
 The libraries are installed under:
 
@@ -169,6 +173,12 @@ source $HOME/ARW/arw_intel_env.sh
 The environment file defines compiler variables, MPI compiler wrappers, NetCDF/HDF5 paths, JasPer paths, WPS compression variables and WRF runtime settings.
 
 ### `03_install_wrf_wps.sh`
+
+On EWC we recommend running it with:
+
+```bash
+ARW_ROOT=/data/ARW ./scripts/03_install_wrf_wps.sh
+```
 
 This script configures and compiles WRF 4.6.1 and WPS 4.6.0.
 
@@ -288,6 +298,15 @@ Before using the installed environment, source:
 ```bash
 source $HOME/ARW/arw_intel_env.sh
 ```
+
+## 04_download_wps_geog.sh
+This scrip downloads Mandatory Static Data for WRF model on the highest resolution. It is also possible to get data on lower resolution following instructions from: https://www2.mmm.ucar.edu/wrf/users/download/get_sources_wps_geog.html#mandatory
+On EWC we recommend running it with:
+
+```bash
+ARW_ROOT=/data/ARW ./scripts/04_download_wps_geog.sh
+```
+
 
 ## Notes on user interaction
 
