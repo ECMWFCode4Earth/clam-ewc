@@ -22,7 +22,7 @@ The default installation directory is:
 $HOME/ARW
 ```
 
-If needed, users can install the ARW software stack on another disk or mount point by setting the `ARW_ROOT` environment variable before running the relevant scripts.
+If needed, users can install the ARW software stack on another disk or mount point by setting the `ARW_ROOT` environment variable before running the relevant scripts. On EWC it is recommended to set ARW_ROOT to a directory on /data e.g.  ARW_ROOT=/data/ARW 
 
 Example:
 
