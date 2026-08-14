@@ -299,7 +299,7 @@ Before using the installed environment, source:
 source $HOME/ARW/arw_intel_env.sh
 ```
 
-## 04_download_wps_geog.sh
+### `04_download_wps_geog.sh`
 This scrip downloads Mandatory Static Data for WRF model on the highest resolution. It is also possible to get data on lower resolution following instructions from: https://www2.mmm.ucar.edu/wrf/users/download/get_sources_wps_geog.html#mandatory
 On EWC we recommend running it with:
 
