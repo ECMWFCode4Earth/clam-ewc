@@ -6,6 +6,10 @@
 
 set -e
 
+if [ ! -d "/data/ARW/GEOG" ]; then
+    mkdir -p "/data/ARW/GEOG"
+fi
+
 cd /data/ARW/GEOG
 
 wget https://www2.mmm.ucar.edu/wrf/src/wps_files/geog_high_res_mandatory.tar.gz

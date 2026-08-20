@@ -121,8 +121,8 @@ export SRC=${ARW_ROOT}/src
 export TESTS=${ARW_ROOT}/TESTS
 export RUNS=${ARW_ROOT}/RUNS
 
-export WRF_DIR=${ARW_ROOT}/WRF-4.6.1
-export WPS_DIR=${ARW_ROOT}/WPS-4.6.0
+export WRF_DIR=${ARW_ROOT}/WRF
+export WPS_DIR=${ARW_ROOT}/WPS
 export JASPER19001=${ARW_ROOT}/JASPER-1.900.1
 
 export CC=icx

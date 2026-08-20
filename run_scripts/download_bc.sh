@@ -5,6 +5,10 @@
 
 set -e
 
+if [ ! -d "/data/ARW/BC" ]; then
+    mkdir -p "/data/ARW/BC"
+fi
+
 cd /data/ARW/BC
 wget ftp://anonymous@bolftp.ecmwf.int/public/wrf/EUROPE/ECMWF_*_europe.tar.gz
 

@@ -92,7 +92,7 @@ which mpiifx
 cd "${ARW_ROOT}"
 
 if [ ! -d "${WRF_DIR}/.git" ]; then
-  echo "========== Cloning WRF 4.6.1 =========="
+  echo "========== Cloning WRF ${WRF_VERSION} =========="
   rm -rf "${WRF_DIR}"
   git clone --branch "${WRF_VERSION}" --recursive https://github.com/wrf-model/WRF.git "${WRF_DIR}"
 else
