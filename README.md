@@ -27,8 +27,8 @@ If needed, users can install the ARW software stack on another disk or mount poi
 Example:
 
 ```bash
-ARW_ROOT=/data/ARW ./scripts/02_install_arw_third_party_libs.sh
-ARW_ROOT=/data/ARW ./scripts/03_install_wrf_wps.sh
+ARW_ROOT=/data/ARW ./build_scripts/02_install_arw_third_party_libs.sh
+ARW_ROOT=/data/ARW ./build_scripts/03_install_wrf_wps.sh
 ```
 
 This is optional. The default location remains `$HOME/ARW`.
