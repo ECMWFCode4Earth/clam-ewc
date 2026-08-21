@@ -7,7 +7,8 @@ FLENGTH=6 # wrf forecast lenght
 
 export RUN_DATE=20180601
 
-export ARW_ROOT=/data/ARW
+export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
+
 export ENV_FILE="$ARW_ROOT/arw_intel_env.sh"
 
 export RUN_CYCLE=${RUN_DATE}${CYC}
