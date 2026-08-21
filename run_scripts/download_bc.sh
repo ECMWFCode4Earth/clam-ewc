@@ -5,15 +5,39 @@
 
 set -e
 
+# Select your domain where possible options are:
+# AFRICA
+# ASIA
+# AUSTRALIA
+# EUROPE
+# NORTH_AMERICA
+# SOUTH_AMERICA
+
+DOMAIN="EUROPE"
+
+if [ "$DOMAIN" = "EUROPE" ]; then
+        domain="europe"
+elif [ "$DOMAIN" = "AFRICA" ]; then
+	domain="africa"
+elif [ "$DOMAIN" = "ASIA" ]; then
+	domain="asia"
+elif [ "$DOMAIN" = "AUSTRALIA" ]; then
+	domain="australia"
+elif [ "$DOMAIN" = "NORTH_AMERICA" ]; then
+	domain="north_america"
+elif [ "$DOMAIN" = "SOUTH_AMERICA" ]; then
+	domain="south_america"
+fi
+
 if [ ! -d "/data/ARW/BC" ]; then
     mkdir -p "/data/ARW/BC"
 fi
 
 cd /data/ARW/BC
-wget ftp://anonymous@bolftp.ecmwf.int/public/wrf/EUROPE/ECMWF_*_europe.tar.gz
+wget ftp://anonymous@bolftp.ecmwf.int/public/wrf/$DOMAIN/ECMWF_*_${domain}.tar.gz
 
-for f in ECMWF_*_europe.tar.gz; do
+for f in ECMWF_*_${domain}.tar.gz; do
     tar -zxvf "$f"
 done
 
-rm ECMWF_*_europe.tar.gz
+rm ECMWF_*_${domain}.tar.gz
