@@ -5,6 +5,14 @@
 
 set -e
 
+export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
+
+if [ ! -d "$ARW_ROOT/BC" ]; then
+    mkdir -p "$ARW_ROOT/BC"
+fi
+
+cd $ARW_ROOT/BC
+
 # Select your domain where possible options are:
 # AFRICA
 # ASIA
@@ -29,11 +37,6 @@ elif [ "$DOMAIN" = "SOUTH_AMERICA" ]; then
 	domain="south_america"
 fi
 
-if [ ! -d "/data/ARW/BC" ]; then
-    mkdir -p "/data/ARW/BC"
-fi
-
-cd /data/ARW/BC
 wget ftp://anonymous@bolftp.ecmwf.int/public/wrf/$DOMAIN/ECMWF_*_${domain}.tar.gz
 
 for f in ECMWF_*_${domain}.tar.gz; do

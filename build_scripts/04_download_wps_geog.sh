@@ -6,11 +6,13 @@
 
 set -e
 
-if [ ! -d "/data/ARW/GEOG" ]; then
-    mkdir -p "/data/ARW/GEOG"
+export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
+
+if [ ! -d "$ARW_ROOT/GEOG" ]; then
+    mkdir -p "$ARW_ROOT/GEOG"
 fi
 
-cd /data/ARW/GEOG
+cd $ARW_ROOT/GEOG
 
 wget https://www2.mmm.ucar.edu/wrf/src/wps_files/geog_high_res_mandatory.tar.gz
 
