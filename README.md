@@ -316,7 +316,7 @@ If you intend to run the model on multiple VMs, this script needs to be executed
 
 ## Notes on user interaction
 
-The installation is largely automated, but the WRF and WPS configuration scripts still ask the user to select the correct build options interactively.
+The installation is largely automated, the WRF and WPS configuration scripts will automatically select the correct build options interactively.
 
 For WRF, choose:
 
@@ -333,14 +333,9 @@ Linux x86_64, Intel compiler, serial
 
 ## Current status
 
-This is an initial working version of the CLAM WRF/WPS installation workflow.
-
 The repository will be extended with:
 
-* example `namelist.wps` and `namelist.input` files
-* WPS and WRF run scripts
 * benchmark results for different EWC VM configurations
-* documentation for domain setup and workflow testing
 * notes on performance, CPU scaling and I/O quilting
 
 ## Disclaimer
