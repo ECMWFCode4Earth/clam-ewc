@@ -57,6 +57,8 @@ cat run_real.sh.in | sed s,_RUN_DIR_,$RUN_DIR, | \
                      sed s,_WRF_,$ARW_ROOT, > ${RUN_DIR}/run_real.sh
 cat run_wrf.sh.in | sed s,_RUN_DIR_,$RUN_DIR, | \
                     sed s,_WRF_,$ARW_ROOT, > ${RUN_DIR}/run_wrf.sh
+cat run_wrf_multiVMs.sh.in | sed s,_RUN_DIR_,$RUN_DIR, | \
+                             sed s,_WRF_,$ARW_ROOT, > ${RUN_DIR}/run_wrf_multiVMs.sh
 
 cd ${RUN_DIR}
 bash run_wps.sh
