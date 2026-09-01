@@ -114,7 +114,7 @@ If you intend to run the model on multiple VMs, this script must be executed on 
 This script downloads, builds and installs the third-party libraries required by WRF and WPS. On EWC we recommend running it with:
 
 ```bash
-ARW_ROOT=/data/ARW ./scripts/02_install_arw_third_party_libs.sh
+ARW_ROOT=/data/ARW ./build_scripts/02_install_arw_third_party_libs.sh
 ```
 
 The libraries are installed under:
@@ -180,7 +180,7 @@ If you intend to run the model on multiple VMs, this script needs to be executed
 On EWC we recommend running it with:
 
 ```bash
-ARW_ROOT=/data/ARW ./scripts/03_install_wrf_wps.sh
+ARW_ROOT=/data/ARW ./build_scripts/03_install_wrf_wps.sh
 ```
 
 This script configures and compiles WRF 4.6.1 and WPS 4.6.0.
@@ -309,7 +309,7 @@ This scrip downloads Mandatory Static Data for WRF model on the highest resoluti
 On EWC we recommend running it with:
 
 ```bash
-ARW_ROOT=/data/ARW ./scripts/04_download_wps_geog.sh
+ARW_ROOT=/data/ARW ./build_scripts/04_download_wps_geog.sh
 ```
 If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
 
