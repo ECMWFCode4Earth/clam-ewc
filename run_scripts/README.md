@@ -35,11 +35,13 @@ with
 ```bash
 bash run_wrf_multiVMs.sh
 ```
-run_wrf_multiVMs.sh.in is provided in the run_scripts directory and should be updated before running the model with private IPs of your VMs, line:
+2) run_wrf_multiVMs.sh.in is provided in the run_scripts directory and should be updated before running the model with private IPs of your VMs, line:
 ```bash
 mpirun --host 192.168.2.156:$WRF_NP_HALF,192.168.2.134:$WRF_NP_HALF -np "$WRF_NP" ./wrf.exe
 ```
 This example runs wrf.exe on two VMs with WRF_NP total number of tasks where each VMs runs equal number of tasks.
+
+3) Passwordless SSH: mpirun typically launches remote processes over SSH, so the launching node needs key-based SSH access to the other node(s) without a password prompt.
 
 
 ## Notes
