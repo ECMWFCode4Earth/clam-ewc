@@ -7,7 +7,7 @@ This directory contains a sample run using **ECMWF IFS pre-MTG2 data** as the **
 Before running the model, first download the boundary condition files by running:
 
 ```bash
-bash download_bc.sh
+ARW_ROOT=/data/ARW ./download_bc.sh
 ```
 
 This script retrieves the Boundary Condition files from ECMWF test data here:
@@ -22,7 +22,7 @@ After the boundary condition files have been downloaded:
 2. Start the model with:
 
 ```bash
-bash main_wrf.sh
+ARW_ROOT=/data/ARW ./main_wrf.sh
 ```
 
 ## Notes
