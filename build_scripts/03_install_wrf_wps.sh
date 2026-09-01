@@ -2,7 +2,7 @@
 set -eo pipefail
 
 # ============================================================
-# WRF 4.6.1 and WPS 4.6.0 installation script
+# WRF 4.8.0 and WPS 4.7.0 installation script
 #
 # This script assumes that the third-party libraries are already
 # installed by install_arw_third-party-libs.sh 
@@ -13,15 +13,15 @@ set -eo pipefail
 #   $HOME/ARW/JASPER-1.900.1
 #
 # Builds:
-#   WRF 4.6.1
-#   WPS 4.6.0
+#   WRF 4.8.0
+#   WPS 4.7.0
 #
 # Important choices based on successful build:
-#   - WRF 4.6.1
+#   - WRF 4.8.0
 #   - WRF dmpar with mpiifx/mpiicx
 #   - WRF flags: -O3, no -ip
 #   - WRF compile: -j 1
-#   - WPS 4.6.0 serial
+#   - WPS 4.7.0 serial
 #   - WPS uses JasPer 1.900.1 for ungrib.exe
 # ============================================================
 
@@ -29,8 +29,8 @@ export ARW_ROOT="${ARW_ROOT:-${HOME}/ARW}"
 export DIR="${ARW_ROOT}/LIBRARIES"
 export SRC="${ARW_ROOT}/src"
 
-export WRF_VERSION="v4.6.1"
-export WPS_VERSION="v4.6.0"
+export WRF_VERSION="v4.8.0"
+export WPS_VERSION="v4.7.0"
 
 export WRF_DIR="${ARW_ROOT}/WRF"
 export WPS_DIR="${ARW_ROOT}/WPS"
@@ -86,7 +86,7 @@ which mpiicx
 which mpiifx
 
 # ------------------------------------------------------------
-# WRF 4.6.1
+# WRF 4.8.0
 # ------------------------------------------------------------
 
 cd "${ARW_ROOT}"
@@ -114,7 +114,7 @@ echo "========== Configuring WRF =========="
 #    The menu numbers change between WRF versions, so the menu is
 #    parsed instead of hard-coding a number: the option taken is the
 #    number printed in front of "(dmpar)" on the
-#    "INTEL (ifx/icx) : oneAPI LLVM" line (78 in WRF 4.6.1).
+#    "INTEL (ifx/icx) : oneAPI LLVM" line (78 in WRF 4.8.0).
 # 2) Nesting: always 1 (basic).
 # ------------------------------------------------------------
 
@@ -187,13 +187,13 @@ if [ ! -x main/real.exe ] || [ ! -x main/wrf.exe ]; then
 fi
 
 # ------------------------------------------------------------
-# WPS 4.6.0
+# WPS 4.7.0
 # ------------------------------------------------------------
 
 cd "${ARW_ROOT}"
 
 if [ ! -d "${WPS_DIR}/.git" ]; then
-  echo "========== Cloning WPS 4.6.0 =========="
+  echo "========== Cloning WPS 4.7.0 =========="
   rm -rf "${WPS_DIR}"
   git clone --branch "${WPS_VERSION}" https://github.com/wrf-model/WPS.git "${WPS_DIR}"
 else
@@ -218,7 +218,7 @@ echo "========== Configuring WPS =========="
 # As for WRF, the menu numbers change between WPS versions, so the menu
 # is parsed and the number of the
 # "Linux x86_64, Intel oneAPI compilers    (serial)" line is used
-# (17 in WPS 4.6.0). The "(serial)" match is anchored to the end of the
+# (17 in WPS 4.7.0). The "(serial)" match is anchored to the end of the
 # line so that "(serial_NO_GRIB2)" is never picked instead.
 # ------------------------------------------------------------
 
