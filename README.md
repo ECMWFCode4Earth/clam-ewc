@@ -64,7 +64,7 @@ The script installs the required Ubuntu packages, including:
 * system development headers
 * `wget`, `curl`, `git`, `rsync` and other useful installation tools
 
-This script should be run first on a fresh VM.
+This script should be run first on a fresh VM. If you intend to run the model on multiple VMs, this script must be executed on each of them.
 
 ### `01_install_intel_oneapi.sh`
 
@@ -107,6 +107,7 @@ mpiicx
 mpiicpx
 mpiifx
 ```
+If you intend to run the model on multiple VMs, this script must be executed on each of them.
 
 ### `02_install_arw_third_party_libs.sh`
 
@@ -172,6 +173,7 @@ source $HOME/ARW/arw_intel_env.sh
 ```
 
 The environment file defines compiler variables, MPI compiler wrappers, NetCDF/HDF5 paths, JasPer paths, WPS compression variables and WRF runtime settings.
+If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
 
 ### `03_install_wrf_wps.sh`
 
@@ -300,6 +302,8 @@ Before using the installed environment, source:
 source $HOME/ARW/arw_intel_env.sh
 ```
 
+If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
+
 ### `04_download_wps_geog.sh`
 This scrip downloads Mandatory Static Data for WRF model on the highest resolution. It is also possible to get data on lower resolution following instructions from: https://www2.mmm.ucar.edu/wrf/users/download/get_sources_wps_geog.html#mandatory
 On EWC we recommend running it with:
@@ -307,6 +311,7 @@ On EWC we recommend running it with:
 ```bash
 ARW_ROOT=/data/ARW ./scripts/04_download_wps_geog.sh
 ```
+If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
 
 
 ## Notes on user interaction
