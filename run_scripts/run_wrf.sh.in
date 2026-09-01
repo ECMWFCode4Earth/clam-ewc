@@ -28,4 +28,6 @@ lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
 rm -f wrf_err log.wrf wrf_out rsl.error.* rsl.out.* wrfout_d01_*
 mpirun -np "$WRF_NP" ./wrf.exe
 
+mpirun --host 192.168.2.156:$WRF_NP_HALF,192.168.2.134:$WRF_NP_HALF -np "$WRF_NP" ./wrf.exe
+
 echo "$0 done."

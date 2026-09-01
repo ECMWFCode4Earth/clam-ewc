@@ -1,0 +1,38 @@
+#!/bin/bash
+
+set -ex
+
+date
+
+WRF=_WRF_
+RUN_DIR=_RUN_DIR_
+
+cd $RUN_DIR
+
+ENV_FILE="$WRF/arw_intel_env.sh"
+
+source "$ENV_FILE"
+
+WRF_NP="${WRF_NP:-16}"
+
+ulimit -s unlimited
+export OMP_NUM_THREADS=1
+export OMP_STACKSIZE=512M
+export KMP_STACKSIZE=512M
+
+echo
+echo "CPU information:"
+echo "nproc = $(nproc)"
+lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
+
+rm -f wrf_err log.wrf wrf_out rsl.error.* rsl.out.* wrfout_d01_*
+# Run on one VM only
+#mpirun -np "$WRF_NP" ./wrf.exe
+
+# Open MPI syntax to run on multiple (2) VMs
+WRF_NP_HALF=$(($WRF_NP / 2))
+# Before running, change private IPs of your VMs. In this example we used 192.168.2.156
+# and 192.168.2.134
+mpirun --host 192.168.2.156:$WRF_NP_HALF,192.168.2.134:$WRF_NP_HALF -np "$WRF_NP" ./wrf.exe
+
+echo "$0 done."
