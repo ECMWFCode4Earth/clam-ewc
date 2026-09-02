@@ -13,8 +13,8 @@ The scripts were developed and tested primarily on:
 * European Weather Cloud virtual machines
 * Ubuntu 24.04
 * Intel oneAPI compiler suite
-* WRF 4.6.1
-* WPS 4.6.0
+* WRF 4.8.0
+* WPS 4.7.0
 
 The default installation directory is:
 
@@ -183,7 +183,7 @@ On EWC we recommend running it with:
 ARW_ROOT=/data/ARW ./build_scripts/03_install_wrf_wps.sh
 ```
 
-This script configures and compiles WRF 4.6.1 and WPS 4.6.0.
+This script configures and compiles WRF 4.8.0 and WPS 4.7.0.
 
 It assumes that the previous third-party library installation step was completed successfully and that the following file exists:
 
@@ -193,19 +193,19 @@ $HOME/ARW/arw_intel_env.sh
 
 The script builds:
 
-* WRF 4.6.1
-* WPS 4.6.0
+* WRF 4.8.0
+* WPS 4.7.0
 
 The WRF source code is cloned from the official WRF GitHub repository using:
 
 ```bash
-git clone --branch v4.6.1 --recursive https://github.com/wrf-model/WRF.git
+git clone --branch v4.8.0 --recursive https://github.com/wrf-model/WRF.git
 ```
 
 The WPS source code is cloned using:
 
 ```bash
-git clone --branch v4.6.0 https://github.com/wrf-model/WPS.git
+git clone --branch v4.7.0 https://github.com/wrf-model/WPS.git
 ```
 
 For WRF, the script is designed for a distributed-memory build:
@@ -278,8 +278,8 @@ metgrid.exe
 After all installation scripts complete successfully, the user should have:
 
 ```bash
-$HOME/ARW/WRF-4.6.1
-$HOME/ARW/WPS-4.6.0
+$HOME/ARW/WRF
+$HOME/ARW/WPS
 $HOME/ARW/LIBRARIES
 $HOME/ARW/JASPER-1.900.1
 $HOME/ARW/arw_intel_env.sh
@@ -288,12 +288,12 @@ $HOME/ARW/arw_intel_env.sh
 The main executables should be available as:
 
 ```bash
-$HOME/ARW/WRF-4.6.1/main/wrf.exe
-$HOME/ARW/WRF-4.6.1/main/real.exe
+$HOME/ARW/WRF/main/wrf.exe
+$HOME/ARW/WRF/main/real.exe
 
-$HOME/ARW/WPS-4.6.0/geogrid.exe
-$HOME/ARW/WPS-4.6.0/ungrib.exe
-$HOME/ARW/WPS-4.6.0/metgrid.exe
+$HOME/ARW/WPS/geogrid.exe
+$HOME/ARW/WPS/ungrib.exe
+$HOME/ARW/WPS/metgrid.exe
 ```
 
 Before using the installed environment, source:
