@@ -73,14 +73,45 @@ bind-mounted host directory (`DATA_DIR`), exposed as `/data`:
 
 ```text
 $DATA_DIR/GEOG   # WPS_GEOG static data (from build_scripts/04_download_wps_geog.sh)
-$DATA_DIR/BC     # boundary-condition GRIB files
-$DATA_DIR/RUNS   # run directories / model output (writable)
+$DATA_DIR/BC     # boundary-condition GRIB files (from run_scripts/download_bc.sh)
+$DATA_DIR/RUNS   # run directories / model output (writable, empty)
 ```
+
+Stage it on the host with the repository scripts, pointing `ARW_ROOT` at
+`DATA_DIR` (the download scripts only touch the `GEOG` and `BC` subdirs):
 
 ```bash
 export DATA_DIR=/data/clam        # host path, adjust as needed
-mkdir -p "$DATA_DIR"/{GEOG,BC,RUNS}
+
+# GEOG (large, mandatory high-res) -> $DATA_DIR/GEOG/WPS_GEOG
+ARW_ROOT="$DATA_DIR" ./build_scripts/04_download_wps_geog.sh
+
+# BC (EUROPE sample) -> $DATA_DIR/BC/ECMWF_*.grb
+ARW_ROOT="$DATA_DIR" ./run_scripts/download_bc.sh
+
+# RUNS: empty and writable; main_wrf.sh creates the <cycle> subdir itself
+mkdir -p "$DATA_DIR/RUNS"
 ```
+
+Resulting layout:
+
+```text
+$DATA_DIR/
+├── GEOG/
+│   └── WPS_GEOG/                 # extracted mandatory high-res fields
+├── BC/
+│   └── ECMWF_20180601_00*.grb    # must match RUN_DATE/CYC in main_wrf.sh
+└── RUNS/                         # empty; run dir created at run time
+```
+
+Notes:
+- **Match the date.** `main_wrf.sh` links boundary conditions as
+  `ECMWF_${RUN_DATE}${CYC}*.grb` (defaults `20180601`, `00Z`, EUROPE). If you
+  change `RUN_DATE`/`CYC`, download BC for that date or the link finds nothing.
+- **Permissions.** Rootless Apptainer runs as your UID, so `$DATA_DIR` and its
+  subdirectories must be writable by your user (they are if you created them).
+- Inside the container these map to `$ARW_ROOT/{GEOG,BC,RUNS}` with
+  `ARW_ROOT=/opt/arw` (via the bind mount / symlinks).
 
 ## 3. Runtime test
 
@@ -99,27 +130,50 @@ Any `not found` line means a runtime library is missing (see Troubleshooting).
 
 ### 3b. Single-node end-to-end run
 
-The binaries are at `/opt/arw/WRF/main` and `/opt/arw/WPS`; the launcher adds
-both to `PATH` and sources the runtime environment automatically.
+The image bundles the `run_scripts` and symlinks `$ARW_ROOT/{GEOG,BC,RUNS}` to
+the `/data` bind mount, so a **single bind of `DATA_DIR`** is all that is needed.
+Run the full pipeline (WPS → real → wrf) with no arguments:
 
 ```bash
+# Full pipeline via the bundled main_wrf.sh
+DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+
 # Interactive shell inside the container
 DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash
 
-# From a prepared run directory on the host (bound under /data/RUNS/<cycle>):
+# Or drive individual steps from a prepared run directory:
 DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash -c '
-  cd /data/RUNS/<cycle>
+  cd /opt/arw/RUNS/<cycle>
   ungrib.exe && geogrid.exe && metgrid.exe
   mpirun -np 4  real.exe
   mpirun -np 16 wrf.exe
 '
 ```
 
+To tweak `RUN_DATE`/`CYC`/IPs without rebuilding, point `RUN_SCRIPTS` at a host
+copy to override the bundled one:
+
+```bash
+RUN_SCRIPTS=$PWD/run_scripts DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+```
+
 Success is `wrfout_d01_*` files in the run directory and `SUCCESS COMPLETE WRF`
 in `rsl.out.0000`.
 
-> The repository `run_scripts/*.sh` still work inside the container: they source
-> `$ARW_ROOT/arw_intel_env.sh` (provided by the image) and call `mpirun`.
+> `run_apptainer.sh` sources `$ARW_ROOT/arw_intel_env.sh` and adds the binary
+> dirs to `PATH` automatically. `main_wrf.sh` creates and fills the `<cycle>`
+> run directory itself — do not run `wrf.exe` in an empty folder.
+
+### 3c. Running from a sandbox (when the SIF won't FUSE-mount)
+
+On hosts where rootless Apptainer cannot mount the SIF (broken
+`fuse-overlayfs`/squashfuse — see Troubleshooting), build a plain-directory
+sandbox and point `IMG` at it; everything else is identical:
+
+```bash
+apptainer build --sandbox clam-sbx clam-wrf.sif      # or: SANDBOX=1 ./docker/build_sif.sh
+IMG=clam-sbx DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+```
 
 ## 4. Multi-node runs (EWC VMs / HPC)
 
@@ -155,6 +209,25 @@ for details.
 
 ## Troubleshooting
 
+- **`stat /usr/bin/ls: no such file or directory` + warnings that
+  `passwd`/`group`/`/tmp` "don't exist in container"** — the SIF's root
+  filesystem is empty: the `docker-daemon://` conversion (common under rootless
+  Apptainer) failed to extract the base layers. Rebuild via a saved archive
+  (`build_sif.sh` already does this):
+  ```bash
+  docker save clam-wrf:latest -o clam-wrf.tar
+  apptainer build clam-wrf.sif docker-archive://clam-wrf.tar
+  ```
+  Verify the Docker image itself is intact first:
+  `docker run --rm clam-wrf:latest /usr/bin/ls /opt/arw`.
+- **`"ls": executable file not found in $PATH`** — `$PATH` is empty in the
+  container (host env passed through by Apptainer/MPI). The image sets an
+  explicit `PATH`; otherwise run with `--cleanenv` or `--env PATH=...`.
+- **`mpirun: command not found`** — the launcher lives in `intel-oneapi-mpi`
+  (the runtime-only `intel-oneapi-runtime-mpi` ships MPI libraries but no
+  `mpirun`/Hydra). The runtime stage installs `intel-oneapi-mpi`; make sure the
+  environment is sourced (`source /opt/arw/arw_intel_env.sh`), which the run
+  scripts and `run_apptainer.sh` do automatically.
 - **`... not found` in `ldd`** — the Intel runtime version must match the
   builder compilers. Pin the same oneAPI release in both stages of the
   `Dockerfile` (build arg / package versions) and rebuild.

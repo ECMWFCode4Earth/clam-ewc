@@ -1,12 +1,11 @@
-# Keep the Docker build context small: only build_scripts/ and docker/ are used.
+# Keep the Docker build context small.
 .git
 **/.git
 **/*.sif
 docker/*.sif
 
-# Repo content not needed by the image build.
+# Repo content not needed by the image build (run_scripts IS needed: bundled).
 README.md
-run_scripts/
 
 # Any local ARW build/run artifacts that may exist under the repo.
 ARW/

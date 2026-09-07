@@ -61,8 +61,11 @@ RUN chmod +x /tmp/build_scripts/*.sh \
 # -----------------------------------------------------------------------------
 FROM ubuntu:24.04 AS runtime
 
+# Explicit PATH so `ls` and the model binaries resolve regardless of how the
+# SIF is launched (Apptainer/MPI can otherwise pass through an empty PATH).
 ENV DEBIAN_FRONTEND=noninteractive \
     ARW_ROOT=/opt/arw \
+    PATH=/opt/arw/WRF/main:/opt/arw/WPS:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     OMP_NUM_THREADS=1 \
     OMP_STACKSIZE=512M \
     KMP_STACKSIZE=512M \
@@ -77,8 +80,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgomp1 procps hostname \
     && rm -rf /var/lib/apt/lists/*
 
-# Intel oneAPI *runtime* redistributables (no compilers). Same repo/release as
-# the builder so the Fortran and MPI runtimes match the compiled binaries.
+# Intel oneAPI runtime redistributables (compiler + Fortran + OpenMP) plus the
+# full Intel MPI runtime. intel-oneapi-mpi (not intel-oneapi-runtime-mpi) is
+# required because only it ships the mpirun / mpiexec.hydra launchers, not just
+# the MPI libraries. Same repo/release as the builder so runtimes match.
 RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
       | gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
@@ -87,7 +92,7 @@ RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PR
       intel-oneapi-runtime-libs \
       intel-oneapi-runtime-fortran \
       intel-oneapi-runtime-openmp \
-      intel-oneapi-runtime-mpi \
+      intel-oneapi-mpi \
     && rm -rf /var/lib/apt/lists/*
 
 # Compiled artifacts from the builder (executables, runtime data, shared libs).
@@ -101,8 +106,16 @@ COPY --from=builder /opt/arw/JASPER-1.900.1/lib  /opt/arw/JASPER-1.900.1/lib
 # keeps working without the full oneAPI setvars.sh / compilers.
 COPY docker/arw_runtime_env.sh /opt/arw/arw_intel_env.sh
 
-# Bind target for host GEOG / BC / RUNS data (writable state lives here).
-RUN mkdir -p /data
+# Bundle the run scripts so no host bind is needed to drive a run.
+COPY run_scripts /opt/arw/run_scripts
+
+# Symlink the mutable dirs under $ARW_ROOT to the /data bind mount so a single
+# `--bind $DATA_DIR:/data` is enough and the run_scripts (which use
+# $ARW_ROOT/{GEOG,BC,RUNS}) work unchanged inside the read-only container.
+RUN mkdir -p /data \
+    && ln -s /data/GEOG /opt/arw/GEOG \
+    && ln -s /data/BC   /opt/arw/BC \
+    && ln -s /data/RUNS /opt/arw/RUNS
 WORKDIR /data
 
 CMD ["/bin/bash"]
