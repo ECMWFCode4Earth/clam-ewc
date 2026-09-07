@@ -13,6 +13,7 @@ image, so no recompilation is needed at run time.
 | [`arw_runtime_env.sh`](arw_runtime_env.sh) | Slim runtime environment installed as `/opt/arw/arw_intel_env.sh`. |
 | [`build_sif.sh`](build_sif.sh) | Builds the image and converts it to a SIF. |
 | [`run_apptainer.sh`](run_apptainer.sh) | Rootless launcher that bind-mounts host data into the container. |
+| [`install_docker.sh`](install_docker.sh) | Installs Docker Engine on Ubuntu 24.04 or Rocky/RHEL 9. |
 | [`install_apptainer.sh`](install_apptainer.sh) | Installs Apptainer on Ubuntu 24.04 or Rocky/RHEL 9. |
 
 ## How it works
@@ -38,10 +39,11 @@ Apptainer user. Large static data (GEOG, boundary conditions, run output) is
 - Network access during the build (Intel APT repo + WRF/WPS/library sources).
 - Apptainer on every node where the container will run.
 
-Install Apptainer on Ubuntu 24.04 or Rocky/RHEL 9 with the helper script:
+Install the toolchain on Ubuntu 24.04 or Rocky/RHEL 9 with the helper scripts:
 
 ```bash
-./docker/install_apptainer.sh
+./docker/install_docker.sh       # Docker Engine (build host)
+./docker/install_apptainer.sh    # Apptainer (build host + run nodes)
 ```
 
 ## 1. Build the image and SIF
