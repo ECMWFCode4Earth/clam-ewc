@@ -17,6 +17,9 @@ source "$ENV_FILE"
 ln -sf $INPUT_DATA/* .
 rm -f rsl.error.* rsl.out.*
 
+# Drop the namelist.input symlinked in from WRF/run so cp writes a local file
+# instead of following the link into a possibly read-only source (container).
+rm -f namelist.input
 cp namelist.input.clam namelist.input 
 
 REAL_NP="${REAL_NP:-4}"
