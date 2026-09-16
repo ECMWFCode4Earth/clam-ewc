@@ -35,7 +35,7 @@ This is optional. The default location remains `$HOME/ARW`.
 
 ## Installation workflow
 
-The installation is split into four main steps:
+The installation is split into five main steps:
 
 ```bash
 chmod +x scripts/*.sh
@@ -48,6 +48,13 @@ chmod +x scripts/*.sh
 ```
 
 Each script performs one clearly defined part of the setup.
+
+If you intend to use **ECMWF open data in GRIB2 format** as initial and boundary conditions, two additional steps are required. See [Working with ECMWF open data](#working-with-ecmwf-open-data-grib2):
+
+```bash
+./build_scripts/03_install_wrf_wps_openData.sh
+./build_scripts/05_install_eccodes.sh
+```
 
 ## Script overview
 
@@ -313,6 +320,55 @@ ARW_ROOT=/data/ARW ./build_scripts/04_download_wps_geog.sh
 ```
 If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
 
+### `05_install_eccodes.sh`
+
+This script is **optional**. It is required only if you want to work with **ECMWF open data in GRIB2 format**, because those files are CCSDS packed (`packingType = grid_ccsds`), which the GRIB2 decoder in `ungrib.exe` cannot read. The `download_bc.sh` script in `run_scripts_opendata/` uses the ecCodes `grib_set` tool to repack them to `grid_simple`, and stops with an error if ecCodes is not available.
+
+ecCodes is also the standard toolset for inspecting these files, with `grib_ls`, `grib_dump`, `grib_get` and `grib_to_netcdf`.
+
+The script installs ecCodes centrally, so it needs `sudo`:
+
+```bash
+ARW_ROOT=/data/ARW ./build_scripts/05_install_eccodes.sh
+```
+
+The default installation prefix is:
+
+```bash
+/usr/local
+```
+
+which is already on the default `PATH`. `ARW_ROOT` is used only for the download and build directory, under `$ARW_ROOT/src`.
+
+The script installs ecCodes 2.48.0 together with libaec 1.1.4, which provides the CCSDS decompression. libaec is built from source on purpose: ecCodes 2.48.0 requires libaec 1.1.4 or newer, while Ubuntu 24.04 only packages 1.1.2, so the distribution package would leave CCSDS support disabled.
+
+The remaining build dependencies are installed from Ubuntu packages, including `cmake`, which is not part of `00_install_system_packages.sh`.
+
+The version, prefix and build options can be overridden from the environment:
+
+```bash
+ECCODES_VERSION=2.48.0
+ECCODES_PREFIX=/usr/local
+ECCODES_RUN_TESTS=1
+ECCODES_WITH_AEC=1
+```
+
+Because ecCodes is installed into a system directory rather than into `ARW_ROOT`, this script must be executed on **each VM** that runs `download_bc.sh` or the ecCodes command line tools.
+
+After installation, check the result with:
+
+```bash
+codes_info
+```
+
+## Working with ECMWF open data (GRIB2)
+
+To run the model with ECMWF open data (IFS operational forecast, 0.25°) instead of the sample dataset, two build steps replace or extend the standard workflow:
+
+1. Use `03_install_wrf_wps_openData.sh` in place of `03_install_wrf_wps.sh`. In addition to building WRF and WPS, it installs the ECMWF version of `WPS/ungrib/src/rd_grib2.F` and the `Vtable.ECMWF_GRIB2_opendata` variable table, both of which `ungrib.exe` needs in order to decode these files.
+2. Run `05_install_eccodes.sh` for the CCSDS repacking described above.
+
+The matching run scripts are in `run_scripts_opendata/`, which has its own README. They download the boundary conditions automatically from https://data.ecmwf.int, one file per 3 hourly forecast step, and repack each one before `ungrib.exe` reads it.
 
 ## Notes on user interaction
 
