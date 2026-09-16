@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -ex
+
+date
+
+WRF=_WRF_
+RUN_DIR=_RUN_DIR_
+
+cd $RUN_DIR
+
+ENV_FILE="$WRF/arw_intel_env.sh"
+
+source "$ENV_FILE"
+
+WRF_NP="${WRF_NP:-32}"
+
+ulimit -s unlimited
+export OMP_NUM_THREADS=1
+export OMP_STACKSIZE=512M
+export KMP_STACKSIZE=512M
+
+echo
+echo "CPU information:"
+echo "nproc = $(nproc)"
+lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
+
+rm -f wrf_err log.wrf wrf_out rsl.error.* rsl.out.* wrfout_d01_*
+mpirun -np "$WRF_NP" ./wrf.exe
+
+echo "$0 done."

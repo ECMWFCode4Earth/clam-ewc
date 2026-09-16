@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -ex
+
+date
+
+WRF=_WRF_
+RUN_DIR=_RUN_DIR_
+cd $RUN_DIR
+
+INPUT_DATA=$WRF/WRF/run
+MAIN=$WRF/WRF/main
+
+ENV_FILE="$WRF/arw_intel_env.sh"
+source "$ENV_FILE"
+
+ln -sf $INPUT_DATA/* .
+rm -f rsl.error.* rsl.out.*
+
+cp namelist.input.clam namelist.input 
+
+REAL_NP="${REAL_NP:-4}"
+
+ulimit -s unlimited
+export OMP_NUM_THREADS=1
+export OMP_STACKSIZE=512M
+export KMP_STACKSIZE=512M
+
+echo
+echo "CPU information:"
+echo "nproc = $(nproc)"
+lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
+
+mpirun -np "$REAL_NP" $MAIN/real.exe
+
+bash run_wrf.sh
+#bash run_wrf_multiVMs.sh
+
+echo "$0 done."
