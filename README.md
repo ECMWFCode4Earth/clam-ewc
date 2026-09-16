@@ -49,10 +49,23 @@ chmod +x scripts/*.sh
 
 Each script performs one clearly defined part of the setup.
 
-If you intend to use **ECMWF open data in GRIB2 format** as initial and boundary conditions, two additional steps are required. See [Working with ECMWF open data](#working-with-ecmwf-open-data-grib2):
+Step 03 comes in two variants, and exactly one of them is run:
+
+| Initial and boundary conditions | Step 03 |
+|---------------------------------|---------|
+| plain version, sample dataset | `03_install_wrf_wps.sh` |
+| ECMWF open data, GRIB2 | `03_install_wrf_wps_openData.sh` |
+
+If you intend to use **ECMWF open data in GRIB2 format**, replace step 03 with the open data variant and add `05_install_eccodes.sh`. See [Working with ECMWF open data](#working-with-ecmwf-open-data-grib2):
 
 ```bash
+chmod +x scripts/*.sh
+
+./build_scripts/00_install_system_packages.sh
+./build_scripts/01_install_intel_oneapi.sh
+./build_scripts/02_install_arw_third_party_libs.sh
 ./build_scripts/03_install_wrf_wps_openData.sh
+./build_scripts/04_download_wps_geog.sh
 ./build_scripts/05_install_eccodes.sh
 ```
 
@@ -183,6 +196,8 @@ The environment file defines compiler variables, MPI compiler wrappers, NetCDF/H
 If you intend to run the model on multiple VMs, this script needs to be executed only on one of them and after setting ARW_ROOT to a filesystem mounted on all VMs.
 
 ### `03_install_wrf_wps.sh`
+
+This is the plain version of step 03, for the sample dataset. If you are using ECMWF open data in GRIB2 format, run `03_install_wrf_wps_openData.sh` instead, as described in [Working with ECMWF open data](#working-with-ecmwf-open-data-grib2). Everything below applies to both variants.
 
 On EWC we recommend running it with:
 
@@ -363,10 +378,10 @@ codes_info
 
 ## Working with ECMWF open data (GRIB2)
 
-To run the model with ECMWF open data (IFS operational forecast, 0.25°) instead of the sample dataset, two build steps replace or extend the standard workflow:
+To run the model with ECMWF open data (IFS operational forecast, 0.25°) instead of the sample dataset, the standard workflow changes in two places:
 
-1. Use `03_install_wrf_wps_openData.sh` in place of `03_install_wrf_wps.sh`. In addition to building WRF and WPS, it installs the ECMWF version of `WPS/ungrib/src/rd_grib2.F` and the `Vtable.ECMWF_GRIB2_opendata` variable table, both of which `ungrib.exe` needs in order to decode these files.
-2. Run `05_install_eccodes.sh` for the CCSDS repacking described above.
+1. **Replace** step 03: run `03_install_wrf_wps_openData.sh` instead of `03_install_wrf_wps.sh`. The two are alternatives and only one of them is run. The open data variant builds the same WRF 4.8.0 and WPS 4.7.0, and additionally installs the ECMWF version of `WPS/ungrib/src/rd_grib2.F` and the `Vtable.ECMWF_GRIB2_opendata` variable table, both of which `ungrib.exe` needs in order to decode these files.
+2. **Add** `05_install_eccodes.sh` for the CCSDS repacking described above.
 
 The matching run scripts are in `run_scripts_opendata/`, which has its own README. They download the boundary conditions automatically from https://data.ecmwf.int, one file per 3 hourly forecast step, and repack each one before `ungrib.exe` reads it.
 
