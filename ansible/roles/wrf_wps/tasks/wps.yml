@@ -105,18 +105,25 @@
       register: configure_wps
       failed_when: not configure_wps.stat.exists
 
+    # "replace", not "lineinfile": configure.wps assigns COMPRESSION_LIBS
+    # and COMPRESSION_INC twice, an "intentionally left blank" placeholder
+    # near the top and the real value further down. lineinfile would only
+    # rewrite the last match, which happens to be the effective one today
+    # but would silently link ungrib.exe against the wrong JasPer if WPS
+    # ever reordered the file. The sed commands in the shell script
+    # replace every matching line, and so does this.
     - name: Point configure.wps at the WRF build and at JasPer 1.900.1
-      ansible.builtin.lineinfile:
+      ansible.builtin.replace:
         path: "{{ wps_dir }}/configure.wps"
         regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
+        replace: "{{ item.line }}"
       loop:
-        - regexp: '^WRF_DIR.*'
+        - regexp: '^WRF_DIR.*$'
           line: "WRF_DIR = {{ wrf_dir }}"
         # ungrib.exe is linked against JasPer 1.900.1.
-        - regexp: '^COMPRESSION_LIBS.*'
+        - regexp: '^COMPRESSION_LIBS.*$'
           line: "COMPRESSION_LIBS    = -L{{ arw_jasper_dir }}/lib -ljasper -L{{ arw_libraries_dir }}/lib -lpng -lz"
-        - regexp: '^COMPRESSION_INC.*'
+        - regexp: '^COMPRESSION_INC.*$'
           line: "COMPRESSION_INC     = -I{{ arw_jasper_dir }}/include -I{{ arw_libraries_dir }}/include"
 
     - name: Show the WPS configure summary

@@ -111,14 +111,18 @@
 
     # Force the Intel MPI wrappers: on some systems mpif90/mpicc from
     # Intel MPI default to GNU backends.
+    #
+    # "replace", not "lineinfile", for the same reason as in wps.yml: it
+    # rewrites every matching line, as the sed commands in the shell
+    # script do. configure.wrf assigns each of these once today.
     - name: Force the Intel MPI wrappers in configure.wrf
-      ansible.builtin.lineinfile:
+      ansible.builtin.replace:
         path: "{{ wrf_dir }}/configure.wrf"
         regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
+        replace: "{{ item.line }}"
       loop:
-        - {regexp: '^DM_FC.*', line: "DM_FC           =       mpiifx"}
-        - {regexp: '^DM_CC.*', line: "DM_CC           =       mpiicx"}
+        - {regexp: '^DM_FC.*$', line: "DM_FC           =       mpiifx"}
+        - {regexp: '^DM_CC.*$', line: "DM_CC           =       mpiicx"}
 
     # Safer Intel build: the default "-O3 -ip" caused excessive memory
     # usage in xfortcom.
