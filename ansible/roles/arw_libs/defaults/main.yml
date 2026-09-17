@@ -1,0 +1,35 @@
+---
+# Versions and download mirrors of the third-party libraries built by
+# build_scripts/02_install_arw_third_party_libs.sh.
+#
+# Each entry keeps the mirror list of the download_with_fallbacks()
+# function of the shell script: the mirrors are tried in order and the
+# first one that works is used.
+
+zlib_version: "1.3.1"
+zlib_urls:
+  - "https://zlib.net/fossils/zlib-{{ zlib_version }}.tar.gz"
+  - "https://github.com/madler/zlib/releases/download/v{{ zlib_version }}/zlib-{{ zlib_version }}.tar.gz"
+
+libpng_version: "1.6.43"
+libpng_urls:
+  - "https://download.sourceforge.net/libpng/libpng-{{ libpng_version }}.tar.gz"
+  - "https://github.com/pnggroup/libpng/archive/refs/tags/v{{ libpng_version }}.tar.gz"
+
+jasper_version: "1.900.1"
+jasper_urls:
+  - "https://www.ece.uvic.ca/~frodo/jasper/software/jasper-{{ jasper_version }}.zip"
+  - "https://src.fedoraproject.org/repo/pkgs/jasper/jasper-{{ jasper_version }}.zip/6b905a9c2aca2e275544212666eefc4c/jasper-{{ jasper_version }}.zip"
+
+hdf5_version: "1.14.6"
+hdf5_urls:
+  - "https://support.hdfgroup.org/releases/hdf5/v1_14/v1_14_6/downloads/hdf5-{{ hdf5_version }}.tar.gz"
+  - "https://github.com/HDFGroup/hdf5/releases/download/hdf5_{{ hdf5_version }}/hdf5-{{ hdf5_version }}.tar.gz"
+
+netcdf_c_version: "4.9.2"
+netcdf_c_urls:
+  - "https://github.com/Unidata/netcdf-c/archive/refs/tags/v{{ netcdf_c_version }}.tar.gz"
+
+netcdf_fortran_version: "4.6.1"
+netcdf_fortran_urls:
+  - "https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v{{ netcdf_fortran_version }}.tar.gz"

@@ -1,0 +1,25 @@
+---
+system_packages:
+  - build-essential
+  - gcc
+  - g++
+  - gfortran
+  - make
+  - m4
+  - perl
+  - csh
+  - tcsh
+  - file
+  - wget
+  - curl
+  - tar
+  - gzip
+  - bzip2
+  - xz-utils
+  - patch
+  - pkg-config
+  - libc6-dev
+  - linux-libc-dev
+  - unzip
+  # Not in script 00, but the playbook clones WRF/WPS with the git module.
+  - git

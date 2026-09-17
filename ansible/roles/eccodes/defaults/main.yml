@@ -1,0 +1,49 @@
+---
+# Equivalent of the environment variables of
+# build_scripts/05_install_eccodes.sh
+
+eccodes_version: "2.48.0"
+eccodes_prefix: "/usr/local"
+eccodes_src: "{{ arw_src_dir }}"
+
+# Run the ctest suite after the build. Failures are reported but are not
+# fatal, as in the shell script.
+eccodes_run_tests: true
+
+# Parallel build jobs; defaults to the number of cores of the target.
+eccodes_jobs: "{{ ansible_processor_vcpus | default(4) }}"
+
+# libaec is deliberately not taken from apt: ecCodes 2.48.0 does a
+# find_package( libaec 1.1.4 ) and Ubuntu 24.04 only ships 1.1.2, so the
+# distribution package would leave CCSDS support disabled. Set to false
+# to build ecCodes without CCSDS/AEC support - it will then not decode
+# packingType = grid_ccsds, which ECMWF uses for many products.
+eccodes_with_aec: true
+libaec_version: "1.1.4"
+
+# The release tarballs are Confluence attachments of the Releases page:
+# https://confluence.ecmwf.int/spaces/ECC/pages/45757960/Releases
+eccodes_url: "https://confluence.ecmwf.int/download/attachments/45757960/eccodes-{{ eccodes_version }}-Source.tar.gz"
+libaec_url: "https://github.com/MathisRosenhauer/libaec/releases/download/v{{ libaec_version }}/libaec-{{ libaec_version }}.tar.gz"
+
+# Out of source builds, as the ecCodes installation instructions require.
+eccodes_src_dir: "{{ eccodes_src }}/eccodes-{{ eccodes_version }}-Source"
+eccodes_build_dir: "{{ eccodes_src }}/eccodes-{{ eccodes_version }}-build"
+libaec_src_dir: "{{ eccodes_src }}/libaec-{{ libaec_version }}"
+libaec_build_dir: "{{ eccodes_src }}/libaec-{{ libaec_version }}-build"
+
+# CMake is not installed by the system_packages role. ecCodes 2.48.0
+# needs CMake 3.12 or newer and libaec 1.1.4 needs 3.26, both satisfied
+# by the 3.28 that Ubuntu 24.04 ships.
+#
+# openjpeg: JPEG2000 packing, used by ECMWF GRIB2 products
+# libpng  : PNG packing
+# netcdf  : grib_to_netcdf. This is the system GNU NetCDF and is
+#           unrelated to the Intel built NetCDF used by WRF/WPS.
+eccodes_packages:
+  - cmake
+  - build-essential
+  - gfortran
+  - libopenjp2-7-dev
+  - libpng-dev
+  - libnetcdf-dev

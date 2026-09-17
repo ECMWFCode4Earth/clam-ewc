@@ -1,0 +1,14 @@
+---
+# Equivalent of build_scripts/00_install_system_packages.sh
+#
+# Prepares a fresh Ubuntu 24.04 system for compiling WRF, WPS and their
+# dependencies: C/C++/Fortran development tools, the shell and archive
+# utilities WRF/WPS need, and the download tools.
+
+- name: Install the WRF/WPS build packages
+  ansible.builtin.apt:
+    name: "{{ system_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true

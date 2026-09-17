@@ -1,0 +1,295 @@
+---
+# Equivalent of build_scripts/05_install_eccodes.sh
+#
+# OPTIONAL: installs ecCodes system wide (default /usr/local).
+#
+# ecCodes is ECMWF's GRIB/BUFR decoding library and command line toolset
+# (grib_ls, grib_dump, grib_copy, grib_to_netcdf, ...). It is NOT
+# required to build or run WRF/WPS: WPS decodes GRIB2 with its own
+# g2lib/JasPer. ecCodes is used to inspect and manipulate the ECMWF open
+# data GRIB2 boundary condition files.
+#
+# Built with the system GNU compilers on purpose: ecCodes is used here as
+# a standalone diagnostic tool, so it is kept independent of the Intel
+# oneAPI build of WRF/WPS and of the NetCDF/HDF5 stack in
+# {{ arw_libraries_dir }}.
+#
+#   ecCodes home: https://confluence.ecmwf.int/spaces/ECC/pages/25107922/ecCodes+Home
+#   Releases:     https://confluence.ecmwf.int/spaces/ECC/pages/45757960/Releases
+#   Installation: https://confluence.ecmwf.int/spaces/ECC/pages/45757987/ecCodes+installation
+
+- name: Report the ecCodes settings
+  ansible.builtin.debug:
+    msg:
+      - "ECCODES_VERSION = {{ eccodes_version }}"
+      - "ECCODES_PREFIX  = {{ eccodes_prefix }}"
+      - "ECCODES_SRC     = {{ eccodes_src }}"
+      - "ECCODES_URL     = {{ eccodes_url }}"
+      - "RUN_TESTS       = {{ eccodes_run_tests }}"
+      - "JOBS            = {{ eccodes_jobs }}"
+      - "WITH_AEC        = {{ eccodes_with_aec }} (libaec {{ libaec_version }})"
+
+- name: Install the ecCodes build dependencies
+  ansible.builtin.apt:
+    name: "{{ eccodes_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Check the CMake version
+  ansible.builtin.command:
+    cmd: cmake --version
+  register: eccodes_cmake
+  changed_when: false
+
+- name: Report the CMake version
+  ansible.builtin.debug:
+    msg: "{{ eccodes_cmake.stdout_lines | first }}"
+
+- name: Create the ecCodes source directory
+  ansible.builtin.file:
+    path: "{{ eccodes_src }}"
+    state: directory
+    mode: "0755"
+
+# ------------------------------------------------------------
+# libaec (CCSDS / AEC packing)
+#
+# Required for ecCodes to read GRIB2 messages with
+# packingType = grid_ccsds, which ECMWF uses for many products. ecCodes
+# itself calls this "highly recommended" and its configure step aborts
+# when libaec is missing and ENABLE_AEC is not set. Installed into the
+# same prefix as ecCodes.
+# ------------------------------------------------------------
+
+- name: Build and install libaec {{ libaec_version }}
+  when: eccodes_with_aec | bool
+  block:
+    - name: Download libaec
+      ansible.builtin.get_url:
+        url: "{{ libaec_url }}"
+        dest: "{{ eccodes_src }}/libaec-{{ libaec_version }}.tar.gz"
+        mode: "0644"
+        timeout: 60
+      register: libaec_download
+      ignore_errors: true
+
+    - name: Fail with the ECCODES_WITH_AEC hint when libaec cannot be downloaded
+      ansible.builtin.fail:
+        msg: |
+          Could not download {{ libaec_url }}
+          Re-run with -e eccodes_with_aec=false to build ecCodes without
+          CCSDS support, or with a different -e libaec_version=...
+      when: libaec_download is failed
+
+    - name: Remove any previous libaec source and build trees
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ libaec_src_dir }}"
+        - "{{ libaec_build_dir }}"
+
+    - name: Unpack libaec
+      ansible.builtin.unarchive:
+        src: "{{ eccodes_src }}/libaec-{{ libaec_version }}.tar.gz"
+        dest: "{{ eccodes_src }}"
+        remote_src: true
+
+    - name: Create the libaec build directory
+      ansible.builtin.file:
+        path: "{{ libaec_build_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Configure libaec
+      ansible.builtin.command:
+        cmd: >-
+          cmake
+          -DCMAKE_INSTALL_PREFIX={{ eccodes_prefix }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
+          {{ libaec_src_dir }}
+        chdir: "{{ libaec_build_dir }}"
+      changed_when: true
+
+    - name: Build libaec
+      ansible.builtin.command:
+        cmd: "make -j {{ eccodes_jobs }}"
+        chdir: "{{ libaec_build_dir }}"
+      changed_when: true
+
+    - name: Install libaec into {{ eccodes_prefix }}
+      ansible.builtin.command:
+        cmd: make install
+        chdir: "{{ libaec_build_dir }}"
+      become: true
+      changed_when: true
+
+    - name: Register the libaec shared libraries
+      ansible.builtin.command:
+        cmd: ldconfig
+      become: true
+      changed_when: true
+
+- name: Warn that CCSDS support is disabled
+  ansible.builtin.debug:
+    msg: "WARNING: ecCodes will not decode packingType = grid_ccsds (eccodes_with_aec is false)."
+  when: not (eccodes_with_aec | bool)
+
+# ------------------------------------------------------------
+# Download and unpack
+# ------------------------------------------------------------
+
+- name: Download ecCodes {{ eccodes_version }}
+  ansible.builtin.get_url:
+    url: "{{ eccodes_url }}"
+    dest: "{{ eccodes_src }}/eccodes-{{ eccodes_version }}-Source.tar.gz"
+    mode: "0644"
+    timeout: 120
+  register: eccodes_download
+  ignore_errors: true
+
+- name: Fail with the release page when ecCodes cannot be downloaded
+  ansible.builtin.fail:
+    msg: |
+      Could not download {{ eccodes_url }}
+      Check the current release number on
+        https://confluence.ecmwf.int/spaces/ECC/pages/45757960/Releases
+      and re-run with, for example, -e eccodes_version=2.48.0
+  when: eccodes_download is failed
+
+- name: Remove any previous ecCodes source and build trees
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ eccodes_src_dir }}"
+    - "{{ eccodes_build_dir }}"
+
+- name: Unpack ecCodes
+  ansible.builtin.unarchive:
+    src: "{{ eccodes_src }}/eccodes-{{ eccodes_version }}-Source.tar.gz"
+    dest: "{{ eccodes_src }}"
+    remote_src: true
+
+- name: Check the unpacked ecCodes source tree
+  ansible.builtin.stat:
+    path: "{{ eccodes_src_dir }}/CMakeLists.txt"
+  register: eccodes_cmakelists
+  failed_when: not eccodes_cmakelists.stat.exists
+
+# ------------------------------------------------------------
+# Configure, build, test, install
+#
+# Out of source build, as the installation instructions require.
+# ENABLE_PNG is off by default upstream and is switched on here because
+# libpng-dev is installed above. CMAKE_PREFIX_PATH is what lets
+# find_package( libaec ) pick up the libaec installed above when
+# eccodes_prefix is not a default system location.
+# ------------------------------------------------------------
+
+- name: Create the ecCodes build directory
+  ansible.builtin.file:
+    path: "{{ eccodes_build_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Configure ecCodes
+  ansible.builtin.command:
+    cmd: >-
+      cmake
+      -DCMAKE_INSTALL_PREFIX={{ eccodes_prefix }}
+      -DCMAKE_PREFIX_PATH={{ eccodes_prefix }}
+      -DCMAKE_BUILD_TYPE=Release
+      -DBUILD_SHARED_LIBS=ON
+      -DENABLE_FORTRAN=ON
+      -DENABLE_NETCDF=ON
+      -DENABLE_JPG=ON
+      -DENABLE_PNG=ON
+      -DENABLE_AEC={{ 'ON' if eccodes_with_aec | bool else 'OFF' }}
+      {{ eccodes_src_dir }}
+    chdir: "{{ eccodes_build_dir }}"
+  changed_when: true
+
+- name: Build ecCodes
+  ansible.builtin.command:
+    cmd: "make -j {{ eccodes_jobs }}"
+    chdir: "{{ eccodes_build_dir }}"
+  changed_when: true
+  async: 7200
+  poll: 30
+
+# Tests are reported but not fatal: a single failing test is not a reason
+# to leave the machine without the ecCodes tools. The summary at the end
+# states whether they passed.
+- name: Run the ecCodes test suite
+  ansible.builtin.command:
+    cmd: "ctest -j {{ eccodes_jobs }} --output-on-failure"
+    chdir: "{{ eccodes_build_dir }}"
+  register: eccodes_ctest
+  failed_when: false
+  changed_when: false
+  when: eccodes_run_tests | bool
+  async: 7200
+  poll: 30
+
+- name: Report failing ecCodes tests
+  ansible.builtin.debug:
+    var: eccodes_ctest.stdout_lines
+  when:
+    - eccodes_run_tests | bool
+    - eccodes_ctest.rc | default(0) != 0
+
+- name: Install ecCodes into {{ eccodes_prefix }}
+  ansible.builtin.command:
+    cmd: make install
+    chdir: "{{ eccodes_build_dir }}"
+  become: true
+  changed_when: true
+
+# Register the new shared libraries. On Ubuntu /usr/local/lib is already
+# on the loader path via /etc/ld.so.conf.d/libc.conf.
+- name: Register the ecCodes shared libraries
+  ansible.builtin.command:
+    cmd: ldconfig
+  become: true
+  changed_when: true
+
+# ------------------------------------------------------------
+# Verify
+# ------------------------------------------------------------
+
+- name: Check that codes_info was installed
+  ansible.builtin.stat:
+    path: "{{ eccodes_prefix }}/bin/codes_info"
+  register: eccodes_codes_info
+  failed_when: not (eccodes_codes_info.stat.exists and (eccodes_codes_info.stat.executable | default(false)))
+
+- name: Run codes_info
+  ansible.builtin.command:
+    cmd: "{{ eccodes_prefix }}/bin/codes_info"
+  register: eccodes_info
+  changed_when: false
+
+- name: Report codes_info
+  ansible.builtin.debug:
+    var: eccodes_info.stdout_lines
+
+- name: Report the ecCodes installation
+  ansible.builtin.debug:
+    msg:
+      - "ecCodes {{ eccodes_version }} installed in {{ eccodes_prefix }}"
+      - "Test suite: {{ eccodes_test_result }}"
+      - "CCSDS/AEC:  {{ 'enabled (libaec ' ~ libaec_version ~ ', same prefix)' if eccodes_with_aec | bool else 'disabled' }}"
+      - "Tools such as grib_ls, grib_dump and grib_to_netcdf are in {{ eccodes_prefix }}/bin"
+      - "{{ 'which is already on the default PATH.' if eccodes_prefix == '/usr/local' else 'Add them with: export PATH=' ~ eccodes_prefix ~ '/bin:$PATH and export LD_LIBRARY_PATH=' ~ eccodes_prefix ~ '/lib:$LD_LIBRARY_PATH' }}"
+      - "Inspect an ECMWF open data file with, for example: grib_ls {{ arw_root }}/BC/*.grib2"
+      - "Python bindings (optional): ECCODES_DIR={{ eccodes_prefix }} pip3 install eccodes --no-binary eccodes"
+  vars:
+    eccodes_test_result: >-
+      {{ 'skipped (eccodes_run_tests is false)'
+         if not (eccodes_run_tests | bool)
+         else ('passed' if (eccodes_ctest.rc | default(1)) == 0
+               else 'FAILED (see the ctest output above)') }}

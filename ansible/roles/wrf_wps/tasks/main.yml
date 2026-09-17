@@ -1,0 +1,23 @@
+---
+# Equivalent of build_scripts/03_install_wrf_wps.sh and, when
+# wps_ecmwf_opendata is true, of 03_install_wrf_wps_openData.sh.
+#
+# Requires the third-party libraries and {{ arw_env_file }} from the
+# arw_libs role.
+
+- name: Import the prerequisite checks
+  ansible.builtin.import_tasks: prerequisites.yml
+
+- name: Import the WRF build
+  ansible.builtin.import_tasks: wrf.yml
+
+- name: Import the WPS build
+  ansible.builtin.import_tasks: wps.yml
+
+- name: Report the installation
+  ansible.builtin.debug:
+    msg:
+      - "WRF and WPS installed successfully."
+      - "WRF directory: {{ wrf_dir }}"
+      - "WPS directory: {{ wps_dir }}"
+      - "To load the environment: source {{ arw_env_file }}"

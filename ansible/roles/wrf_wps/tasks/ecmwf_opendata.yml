@@ -1,0 +1,53 @@
+---
+# ECMWF open data patches for ungrib, from
+# build_scripts/03_install_wrf_wps_openData.sh.
+#
+# ungrib as shipped cannot decode the ECMWF open data GRIB2 files, so
+# two files from the ECMWF Confluence page are installed:
+#
+#   ungrib/src/rd_grib2.F                              (replaced)
+#   ungrib/Variable_Tables/Vtable.ECMWF_GRIB2_opendata (new)
+#
+# The shipped rd_grib2.F is kept as rd_grib2.F.orig on the first run.
+
+- name: Check for a previous backup of the shipped rd_grib2.F
+  ansible.builtin.stat:
+    path: "{{ wps_dir }}/ungrib/src/rd_grib2.F.orig"
+  register: rd_grib2_orig
+
+- name: Keep the shipped rd_grib2.F as rd_grib2.F.orig
+  ansible.builtin.copy:
+    src: "{{ wps_dir }}/ungrib/src/rd_grib2.F"
+    dest: "{{ wps_dir }}/ungrib/src/rd_grib2.F.orig"
+    remote_src: true
+    mode: preserve
+  when: not rd_grib2_orig.stat.exists
+
+# force: true because the destination always exists - the shipped file is
+# being replaced. get_url downloads to a temporary file and compares it
+# with the destination, so an interrupted transfer cannot leave a
+# truncated rd_grib2.F in the WPS source tree and an unchanged download
+# is not reported as a change.
+- name: Install the ECMWF rd_grib2.F
+  ansible.builtin.get_url:
+    url: "{{ ecmwf_rd_grib2_url }}"
+    dest: "{{ wps_dir }}/ungrib/src/rd_grib2.F"
+    mode: "0644"
+    force: true
+    timeout: 60
+  register: ecmwf_rd_grib2
+
+- name: Install Vtable.ECMWF_GRIB2_opendata
+  ansible.builtin.get_url:
+    url: "{{ ecmwf_vtable_url }}"
+    dest: "{{ wps_dir }}/ungrib/Variable_Tables/Vtable.ECMWF_GRIB2_opendata"
+    mode: "0644"
+    force: true
+    timeout: 60
+  register: ecmwf_vtable
+
+# A new rd_grib2.F must be compiled even when ungrib.exe already exists,
+# so this forces the configure/compile block below to run.
+- name: Note whether the ungrib sources changed
+  ansible.builtin.set_fact:
+    wps_ecmwf_patched: "{{ ecmwf_rd_grib2 is changed or ecmwf_vtable is changed }}"

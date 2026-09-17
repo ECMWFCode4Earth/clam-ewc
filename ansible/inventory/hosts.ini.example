@@ -1,0 +1,16 @@
+# Copy to hosts.ini and edit.
+#
+# The playbook is written for Ubuntu 24.04 EWC virtual machines and is
+# normally run against one VM at a time, but nothing stops it from
+# building several in parallel.
+
+[arw]
+# A remote EWC VM:
+# wrf-vm-1 ansible_host=10.0.0.11 ansible_user=ubuntu
+#
+# Or the machine you are sitting on:
+# localhost ansible_connection=local
+
+[arw:vars]
+# Recommended on EWC: put the software stack on the data volume.
+# arw_root=/data/ARW

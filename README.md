@@ -69,6 +69,24 @@ chmod +x scripts/*.sh
 ./build_scripts/05_install_eccodes.sh
 ```
 
+### Ansible
+
+The same installation is also available as an Ansible playbook in
+[`ansible/`](ansible/), for building several VMs from one place or for
+re-running a step without having to track what was already done:
+
+```bash
+cd ansible
+cp inventory/hosts.ini.example inventory/hosts.ini   # then edit it
+ansible-playbook site.yml -e arw_root=/data/ARW
+ansible-playbook site.yml -e arw_root=/data/ARW -e wps_ecmwf_opendata=true  # ECMWF open data
+```
+
+One role per script, with the same build settings and the same
+`${ARW_ROOT}/arw_intel_env.sh`, so the `run_scripts` are unaffected by
+the choice. See [`ansible/README.md`](ansible/README.md). The shell
+scripts remain the reference implementation.
+
 ## Script overview
 
 ### `00_install_system_packages.sh`

@@ -1,0 +1,23 @@
+---
+# One mirror attempt for download_with_fallbacks.yml.
+#
+# get_url downloads to a temporary file and only moves it into place on
+# success, so a failed transfer cannot leave a truncated archive behind -
+# the same reason the shell script downloads to "${output_file}.tmp".
+
+- name: "Download {{ dl_dest | basename }} from {{ dl_url }}"
+  ansible.builtin.get_url:
+    url: "{{ dl_url }}"
+    dest: "{{ dl_dest }}"
+    mode: "0644"
+    timeout: 120
+  register: dl_attempt
+  ignore_errors: true
+  when: not dl_done
+
+- name: "Stop trying mirrors once {{ dl_dest | basename }} is downloaded"
+  ansible.builtin.set_fact:
+    dl_done: true
+  when:
+    - not dl_done
+    - dl_attempt is succeeded

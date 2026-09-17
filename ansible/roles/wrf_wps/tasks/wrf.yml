@@ -1,0 +1,173 @@
+---
+# WRF {{ wrf_version }}, dmpar, built with mpiifx/mpiicx.
+
+- name: Check whether the WRF source tree is already present
+  ansible.builtin.stat:
+    path: "{{ wrf_dir }}/.git"
+  register: wrf_git
+
+- name: Clone WRF {{ wrf_version }}
+  ansible.builtin.git:
+    repo: "{{ wrf_repo }}"
+    dest: "{{ wrf_dir }}"
+    version: "{{ wrf_version }}"
+    recursive: true
+  when: not wrf_git.stat.exists
+
+- name: Update the WRF submodules
+  ansible.builtin.command:
+    cmd: git submodule update --init --recursive
+    chdir: "{{ wrf_dir }}"
+  register: wrf_submodules
+  changed_when: wrf_submodules.stdout | length > 0
+
+- name: Check for existing WRF executables
+  ansible.builtin.stat:
+    path: "{{ wrf_dir }}/main/wrf.exe"
+  register: wrf_exe
+
+- name: Configure and compile WRF
+  when: wrf_force_rebuild | bool or not wrf_exe.stat.exists
+  block:
+    - name: Clean the WRF source tree
+      ansible.builtin.command:
+        cmd: ./clean -a
+        chdir: "{{ wrf_dir }}"
+      changed_when: true
+
+    # ------------------------------------------------------------
+    # Answer the two interactive WRF configure questions.
+    #
+    # 1) Compiler/parallelism option. The menu numbers change between
+    #    WRF versions, so the menu is parsed instead of hard-coding a
+    #    number: the option taken is the number printed in front of
+    #    "(dmpar)" on the "INTEL (ifx/icx) : oneAPI LLVM" line
+    #    (78 in WRF 4.8.0).
+    # 2) Nesting: always 1 (basic).
+    #
+    # Answering "-1" makes arch/Config.pl print the menu and exit
+    # without writing configure.wrf. The head/timeout are only a guard
+    # against configure looping if it ever stops accepting -1.
+    # ------------------------------------------------------------
+
+    - name: Probe the WRF configure menu
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          printf -- '-1\n' | timeout 300 ./configure 2>&1 | head -n 300 || true
+        chdir: "{{ wrf_dir }}"
+        executable: /bin/bash
+      register: wrf_menu
+      changed_when: false
+
+    - name: 'Find the "(dmpar) INTEL (ifx/icx) : oneAPI LLVM" menu line'
+      ansible.builtin.set_fact:
+        wrf_config_line: "{{ (wrf_menu.stdout_lines | select('match', '\\s*[0-9]+\\.') | select('search', '(?i)ifx/icx') | select('search', '(?i)oneapi') | list | first) | default('', true) }}"
+
+    - name: Extract the WRF configure option number
+      ansible.builtin.set_fact:
+        wrf_config_option: "{{ (wrf_config_line | regex_search('([0-9]+)\\.\\s*\\(dmpar\\)', '\\1') | default([], true) | first) | default('', true) }}"
+
+    - name: Fail when the WRF dmpar oneAPI option was not found
+      ansible.builtin.fail:
+        msg: |
+          Could not find the '(dmpar) INTEL (ifx/icx) : oneAPI LLVM' option
+          in the WRF configure menu.
+          Menu printed by ./configure:
+          ------------------------------------------------------------
+          {{ wrf_menu.stdout }}
+          ------------------------------------------------------------
+      when: wrf_config_option | length == 0
+
+    - name: Report the WRF configure answers
+      ansible.builtin.debug:
+        msg:
+          - "Compiler option : {{ wrf_config_option }}"
+          - "  {{ wrf_config_line }}"
+          - "Nesting option  : {{ wrf_config_nesting }} (basic)"
+
+    - name: Configure WRF non-interactively
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          printf '%s\n%s\n' "{{ wrf_config_option }}" "{{ wrf_config_nesting }}" | ./configure
+        chdir: "{{ wrf_dir }}"
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Check that configure.wrf was created
+      ansible.builtin.stat:
+        path: "{{ wrf_dir }}/configure.wrf"
+      register: configure_wrf
+      failed_when: not configure_wrf.stat.exists
+
+    # Force the Intel MPI wrappers: on some systems mpif90/mpicc from
+    # Intel MPI default to GNU backends.
+    - name: Force the Intel MPI wrappers in configure.wrf
+      ansible.builtin.lineinfile:
+        path: "{{ wrf_dir }}/configure.wrf"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - {regexp: '^DM_FC.*', line: "DM_FC           =       mpiifx"}
+        - {regexp: '^DM_CC.*', line: "DM_CC           =       mpiicx"}
+
+    # Safer Intel build: the default "-O3 -ip" caused excessive memory
+    # usage in xfortcom.
+    - name: Drop -ip from the WRF compiler flags
+      ansible.builtin.replace:
+        path: "{{ wrf_dir }}/configure.wrf"
+        regexp: ' -ip '
+        replace: ' '
+
+    - name: Show the WRF configure summary
+      ansible.builtin.shell:
+        cmd: grep -E "DESCRIPTION|SFC|SCC|DM_FC|DM_CC|NETCDF" configure.wrf
+        chdir: "{{ wrf_dir }}"
+        executable: /bin/bash
+      register: wrf_config_summary
+      changed_when: false
+
+    - name: Report the WRF configure summary
+      ansible.builtin.debug:
+        var: wrf_config_summary.stdout_lines
+
+    - name: Compile WRF {{ wrf_case }}
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          ./compile -j {{ wrf_compile_jobs }} {{ wrf_case }} 2>&1 | tee {{ wrf_compile_log }}
+        chdir: "{{ wrf_dir }}"
+        executable: /bin/bash
+      # A -j 1 em_real build takes one to three hours on an EWC VM.
+      async: 28800
+      poll: 60
+      changed_when: true
+
+- name: Check the WRF executables
+  ansible.builtin.stat:
+    path: "{{ wrf_dir }}/main/{{ item }}"
+  loop:
+    - real.exe
+    - wrf.exe
+  register: wrf_exe_check
+  failed_when: not (wrf_exe_check.stat.exists and (wrf_exe_check.stat.executable | default(false)))
+
+- name: Report the WRF executables
+  ansible.builtin.debug:
+    msg: "{{ item.stat.path }} ({{ item.stat.size }} bytes)"
+  loop: "{{ wrf_exe_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"

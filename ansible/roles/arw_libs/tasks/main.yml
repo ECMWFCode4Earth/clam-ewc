@@ -1,0 +1,461 @@
+---
+# Equivalent of build_scripts/02_install_arw_third_party_libs.sh
+#
+# Builds, with Intel oneAPI:
+#   zlib, libpng, JasPer 1.900.1, HDF5 (parallel), netCDF-C, netCDF-Fortran
+#
+# Installation root  : {{ arw_root }}
+# Library prefix     : {{ arw_libraries_dir }}
+# JasPer 1.900.1     : {{ arw_jasper_dir }}
+
+- name: Make sure the Intel oneAPI environment is known
+  ansible.builtin.import_tasks: oneapi_env.yml
+
+- name: Create the ARW directory tree
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ arw_root }}"
+    - "{{ arw_libraries_dir }}"
+    - "{{ arw_src_dir }}"
+    - "{{ arw_tests_dir }}"
+    - "{{ arw_runs_dir }}"
+
+# ------------------------------------------------------------
+# Reusable environment script
+#
+# Written before the libraries are built, exactly as in the shell
+# script: every build task below, every later role and the run_scripts
+# all source this one file.
+# ------------------------------------------------------------
+
+- name: Install the ARW Intel environment script
+  ansible.builtin.template:
+    src: arw_intel_env.sh.j2
+    dest: "{{ arw_env_file }}"
+    mode: "0755"
+
+- name: Check the Intel compilers
+  ansible.builtin.shell:
+    cmd: |
+      # Intel's setvars.sh is sourced with errexit off, as in the
+      # shell scripts: it is not written to run under set -eu.
+      set +eu
+      source "{{ arw_env_file }}"
+      set -eo pipefail
+      which icx ifx mpiicx mpiifx
+      icx --version | head -1
+      ifx --version | head -1
+    executable: /bin/bash
+  register: arw_compiler_check
+  changed_when: false
+
+- name: Show the compilers that will be used
+  ansible.builtin.debug:
+    var: arw_compiler_check.stdout_lines
+
+# ------------------------------------------------------------
+# Which libraries are already installed?
+#
+# These are the "if [ ! -f ... ]" guards of the shell script. Each
+# library is built by a different stage, so evaluating all of the guards
+# up front gives the same result as testing them one at a time.
+# ------------------------------------------------------------
+
+- name: Check which third-party libraries are already installed
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop:
+    - {name: zlib, path: "{{ arw_libraries_dir }}/lib/libz.so"}
+    - {name: libpng, path: "{{ arw_libraries_dir }}/lib/libpng16.so"}
+    - {name: jasper, path: "{{ arw_jasper_dir }}/lib/libjasper.so.1"}
+    - {name: hdf5, path: "{{ arw_libraries_dir }}/lib/libhdf5.so"}
+    - {name: netcdf_c, path: "{{ arw_libraries_dir }}/lib/libnetcdf.so"}
+    - {name: netcdf_fortran, path: "{{ arw_libraries_dir }}/lib/libnetcdff.so"}
+  loop_control:
+    label: "{{ item.path }}"
+  register: arw_lib_stat
+
+- name: Collect the library guards into one fact
+  ansible.builtin.set_fact:
+    arw_installed: "{{ dict(arw_lib_stat.results | map(attribute='item.name') | list | zip(arw_lib_stat.results | map(attribute='stat.exists') | list)) }}"
+
+- name: Report which libraries still have to be built
+  ansible.builtin.debug:
+    msg: "{{ arw_installed }}"
+
+# ------------------------------------------------------------
+# zlib
+# ------------------------------------------------------------
+
+- name: Build zlib {{ zlib_version }}
+  when: not arw_installed.zlib
+  block:
+    - name: Download the zlib source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/zlib-{{ zlib_version }}.tar.gz"
+        dl_urls: "{{ zlib_urls }}"
+
+    - name: Remove any previous zlib source tree
+      ansible.builtin.file:
+        path: "{{ arw_src_dir }}/zlib-{{ zlib_version }}"
+        state: absent
+
+    - name: Unpack zlib
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/zlib-{{ zlib_version }}.tar.gz"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    - name: Configure, build and install zlib
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          CC=icx ./configure --prefix="{{ arw_libraries_dir }}"
+          make -j {{ arw_build_jobs }}
+          make install
+        chdir: "{{ arw_src_dir }}/zlib-{{ zlib_version }}"
+        executable: /bin/bash
+      async: 3600
+      poll: 15
+
+- name: Verify zlib
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ arw_libraries_dir }}/lib/libz.so"
+    - "{{ arw_libraries_dir }}/include/zlib.h"
+  register: zlib_check
+  failed_when: not zlib_check.stat.exists
+
+# ------------------------------------------------------------
+# libpng
+# ------------------------------------------------------------
+
+- name: Build libpng {{ libpng_version }}
+  when: not arw_installed.libpng
+  block:
+    - name: Download the libpng source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/libpng-{{ libpng_version }}.tar.gz"
+        dl_urls: "{{ libpng_urls }}"
+
+    - name: Remove any previous libpng source tree
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ arw_src_dir }}/libpng-{{ libpng_version }}"
+        - "{{ arw_src_dir }}/libpng-{{ libpng_version }}.tar"
+
+    - name: Unpack libpng
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/libpng-{{ libpng_version }}.tar.gz"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    # Depending on the mirror the archive unpacks either into
+    # libpng-<version>/ or into libpng-<version>.tar/, so the directory
+    # is looked up instead of assumed.
+    - name: Locate the unpacked libpng source directory
+      ansible.builtin.find:
+        paths: "{{ arw_src_dir }}"
+        patterns: "libpng-{{ libpng_version }}*"
+        file_type: directory
+        recurse: false
+      register: libpng_found
+
+    - name: Fail when the libpng source directory was not found
+      ansible.builtin.fail:
+        msg: "libpng source directory not found after extraction in {{ arw_src_dir }}"
+      when: libpng_found.files | length == 0
+
+    - name: Configure, build and install libpng
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          CC=icx \
+          CPPFLAGS="-I{{ arw_libraries_dir }}/include" \
+          LDFLAGS="-L{{ arw_libraries_dir }}/lib" \
+          ./configure --prefix="{{ arw_libraries_dir }}"
+          make -j {{ arw_build_jobs }}
+          make install
+        chdir: "{{ libpng_found.files | map(attribute='path') | sort | first }}"
+        executable: /bin/bash
+      async: 3600
+      poll: 15
+
+- name: Verify libpng
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ arw_libraries_dir }}/lib/libpng16.so"
+    - "{{ arw_libraries_dir }}/include/png.h"
+  register: libpng_check
+  failed_when: not libpng_check.stat.exists
+
+# ------------------------------------------------------------
+# JasPer 1.900.1
+#
+# The old 1.900.1 release is what ungrib.exe needs. It is built with
+# -std=gnu89 and the warnings that icx turns into errors switched off,
+# and with -j 1 because its makefiles are not parallel safe.
+# ------------------------------------------------------------
+
+- name: Build JasPer {{ jasper_version }}
+  when: not arw_installed.jasper
+  block:
+    - name: Download the JasPer source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/jasper-{{ jasper_version }}.zip"
+        dl_urls: "{{ jasper_urls }}"
+
+    - name: Remove any previous JasPer source tree
+      ansible.builtin.file:
+        path: "{{ arw_src_dir }}/jasper-{{ jasper_version }}"
+        state: absent
+
+    - name: Unpack JasPer
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/jasper-{{ jasper_version }}.zip"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    - name: Configure, build and install JasPer
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          CC=icx \
+          CFLAGS="-O1 -fPIC -std=gnu89 \
+          -Wno-implicit-function-declaration \
+          -Wno-incompatible-function-pointer-types \
+          -Wno-incompatible-pointer-types \
+          -Wno-error=incompatible-function-pointer-types \
+          -Wno-error=incompatible-pointer-types \
+          -I{{ arw_libraries_dir }}/include" \
+          LDFLAGS="-L{{ arw_libraries_dir }}/lib" \
+          ./configure \
+            --prefix="{{ arw_jasper_dir }}" \
+            --enable-shared
+          make -j 1
+          make install
+        chdir: "{{ arw_src_dir }}/jasper-{{ jasper_version }}"
+        executable: /bin/bash
+      async: 3600
+      poll: 15
+
+- name: Verify JasPer and its jpc_decode symbol
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      test -f "{{ arw_jasper_dir }}/lib/libjasper.so.1"
+      nm -D "{{ arw_jasper_dir }}/lib/libjasper.so" | grep jpc_decode
+    executable: /bin/bash
+  changed_when: false
+
+# ------------------------------------------------------------
+# HDF5 (parallel, with Fortran and the high level API)
+# ------------------------------------------------------------
+
+- name: Build HDF5 {{ hdf5_version }}
+  when: not arw_installed.hdf5
+  block:
+    - name: Download the HDF5 source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/hdf5-{{ hdf5_version }}.tar.gz"
+        dl_urls: "{{ hdf5_urls }}"
+
+    - name: Remove any previous HDF5 source tree
+      ansible.builtin.file:
+        path: "{{ arw_src_dir }}/hdf5-{{ hdf5_version }}"
+        state: absent
+
+    - name: Unpack HDF5
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/hdf5-{{ hdf5_version }}.tar.gz"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    - name: Configure, build and install HDF5
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          CC=mpiicx FC=mpiifx \
+          CFLAGS="-O2 -fPIC" \
+          FCFLAGS="-O2 -fPIC" \
+          CPPFLAGS="-I{{ arw_libraries_dir }}/include" \
+          LDFLAGS="-L{{ arw_libraries_dir }}/lib" \
+          ./configure \
+            --prefix="{{ arw_libraries_dir }}" \
+            --enable-fortran \
+            --enable-parallel \
+            --enable-shared \
+            --enable-hl \
+            --with-zlib="{{ arw_libraries_dir }}"
+          make -j {{ arw_build_jobs }}
+          make install
+        chdir: "{{ arw_src_dir }}/hdf5-{{ hdf5_version }}"
+        executable: /bin/bash
+      async: 14400
+      poll: 30
+
+- name: Verify HDF5
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ arw_libraries_dir }}/lib/libhdf5.so"
+    - "{{ arw_libraries_dir }}/lib/libhdf5_fortran.so"
+  register: hdf5_check
+  failed_when: not hdf5_check.stat.exists
+
+# ------------------------------------------------------------
+# netCDF-C
+# ------------------------------------------------------------
+
+- name: Build netCDF-C {{ netcdf_c_version }}
+  when: not arw_installed.netcdf_c
+  block:
+    - name: Download the netCDF-C source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/netcdf-c-{{ netcdf_c_version }}.tar.gz"
+        dl_urls: "{{ netcdf_c_urls }}"
+
+    - name: Remove any previous netCDF-C source tree
+      ansible.builtin.file:
+        path: "{{ arw_src_dir }}/netcdf-c-{{ netcdf_c_version }}"
+        state: absent
+
+    - name: Unpack netCDF-C
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/netcdf-c-{{ netcdf_c_version }}.tar.gz"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    - name: Configure, build and install netCDF-C
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          CC=mpiicx \
+          CPPFLAGS="-I{{ arw_libraries_dir }}/include" \
+          LDFLAGS="-L{{ arw_libraries_dir }}/lib" \
+          LIBS="-lhdf5_hl -lhdf5 -lz" \
+          ./configure \
+            --prefix="{{ arw_libraries_dir }}" \
+            --enable-netcdf-4 \
+            --enable-shared \
+            --disable-dap \
+            --disable-libxml2 \
+            --disable-byterange
+          make -j {{ arw_build_jobs }}
+          make install
+        chdir: "{{ arw_src_dir }}/netcdf-c-{{ netcdf_c_version }}"
+        executable: /bin/bash
+      async: 7200
+      poll: 30
+
+- name: Verify netCDF-C
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      test -f "{{ arw_libraries_dir }}/lib/libnetcdf.so"
+      "{{ arw_libraries_dir }}/bin/nc-config" --prefix
+      "{{ arw_libraries_dir }}/bin/nc-config" --has-nc4
+      "{{ arw_libraries_dir }}/bin/nc-config" --has-hdf5
+    executable: /bin/bash
+  register: netcdf_c_check
+  changed_when: false
+
+- name: Show the netCDF-C configuration
+  ansible.builtin.debug:
+    var: netcdf_c_check.stdout_lines
+
+# ------------------------------------------------------------
+# netCDF-Fortran
+# ------------------------------------------------------------
+
+- name: Build netCDF-Fortran {{ netcdf_fortran_version }}
+  when: not arw_installed.netcdf_fortran
+  block:
+    - name: Download the netCDF-Fortran source
+      ansible.builtin.include_tasks: download_with_fallbacks.yml
+      vars:
+        dl_dest: "{{ arw_src_dir }}/netcdf-fortran-{{ netcdf_fortran_version }}.tar.gz"
+        dl_urls: "{{ netcdf_fortran_urls }}"
+
+    - name: Remove any previous netCDF-Fortran source tree
+      ansible.builtin.file:
+        path: "{{ arw_src_dir }}/netcdf-fortran-{{ netcdf_fortran_version }}"
+        state: absent
+
+    - name: Unpack netCDF-Fortran
+      ansible.builtin.unarchive:
+        src: "{{ arw_src_dir }}/netcdf-fortran-{{ netcdf_fortran_version }}.tar.gz"
+        dest: "{{ arw_src_dir }}"
+        remote_src: true
+
+    - name: Configure, build and install netCDF-Fortran
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          FC=mpiifx \
+          F77=mpiifx \
+          CPPFLAGS="-I{{ arw_libraries_dir }}/include" \
+          LDFLAGS="-L{{ arw_libraries_dir }}/lib" \
+          LIBS="-lnetcdf -lhdf5_hl -lhdf5 -lz" \
+          ./configure \
+            --prefix="{{ arw_libraries_dir }}" \
+            --enable-shared
+          make -j {{ arw_build_jobs }}
+          make install
+        chdir: "{{ arw_src_dir }}/netcdf-fortran-{{ netcdf_fortran_version }}"
+        executable: /bin/bash
+      async: 7200
+      poll: 30
+
+- name: Verify netCDF-Fortran
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      test -f "{{ arw_libraries_dir }}/lib/libnetcdff.so"
+      "{{ arw_libraries_dir }}/bin/nf-config" --prefix
+    executable: /bin/bash
+  register: netcdf_f_check
+  changed_when: false
+
+- name: Report the installed libraries
+  ansible.builtin.debug:
+    msg:
+      - "Third-party libraries installed successfully."
+      - "Environment file: {{ arw_env_file }}"
+      - "To load the environment: source {{ arw_env_file }}"

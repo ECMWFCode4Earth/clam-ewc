@@ -33,7 +33,7 @@ lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
 
 mpirun -np "$REAL_NP" $MAIN/real.exe
 
-bash run_wrf.sh
-#bash run_wrf_multiVMs.sh
+#bash run_wrf.sh
+bash run_wrf_multiVMs.sh
 
 echo "$0 done."

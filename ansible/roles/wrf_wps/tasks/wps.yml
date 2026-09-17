@@ -1,0 +1,180 @@
+---
+# WPS {{ wps_version }}, serial, with GRIB2 support. WRF itself is built
+# with MPI; only WPS is serial.
+
+- name: Check whether the WPS source tree is already present
+  ansible.builtin.stat:
+    path: "{{ wps_dir }}/.git"
+  register: wps_git
+
+- name: Clone WPS {{ wps_version }}
+  ansible.builtin.git:
+    repo: "{{ wps_repo }}"
+    dest: "{{ wps_dir }}"
+    version: "{{ wps_version }}"
+  when: not wps_git.stat.exists
+
+- name: Install the ECMWF open data ungrib patches
+  ansible.builtin.import_tasks: ecmwf_opendata.yml
+  when: wps_ecmwf_opendata | bool
+
+- name: Check for existing WPS executables
+  ansible.builtin.stat:
+    path: "{{ wps_dir }}/ungrib.exe"
+  register: wps_exe
+
+- name: Configure and compile WPS
+  when: wps_force_rebuild | bool or wps_ecmwf_patched | default(false) or not wps_exe.stat.exists
+  block:
+    - name: Clean the WPS source tree
+      ansible.builtin.command:
+        cmd: ./clean -a
+        chdir: "{{ wps_dir }}"
+      changed_when: true
+
+    # ------------------------------------------------------------
+    # Answer the interactive WPS configure question.
+    #
+    # As for WRF, the menu numbers change between WPS versions, so the
+    # menu is parsed and the number of the
+    # "Linux x86_64, Intel oneAPI compilers    (serial)" line is used
+    # (17 in WPS 4.7.0). The "(serial)" match is anchored to the end of
+    # the line so that "(serial_NO_GRIB2)" is never picked instead.
+    # ------------------------------------------------------------
+
+    - name: Probe the WPS configure menu
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          export WRF_DIR="{{ wrf_dir }}"
+          printf -- '-1\n' | timeout 300 ./configure 2>&1 | head -n 300 || true
+        chdir: "{{ wps_dir }}"
+        executable: /bin/bash
+      register: wps_menu
+      changed_when: false
+
+    - name: Find the "Linux x86_64, Intel oneAPI compilers (serial)" menu line
+      ansible.builtin.set_fact:
+        wps_config_line: "{{ (wps_menu.stdout_lines | select('match', '\\s*[0-9]+\\.') | select('search', '(?i)linux x86_64') | select('search', '(?i)oneapi') | select('search', '\\(serial\\)\\s*$') | list | first) | default('', true) }}"
+
+    - name: Extract the WPS configure option number
+      ansible.builtin.set_fact:
+        wps_config_option: "{{ (wps_config_line | regex_search('^\\s*([0-9]+)', '\\1') | default([], true) | first) | default('', true) }}"
+
+    - name: Fail when the WPS serial oneAPI option was not found
+      ansible.builtin.fail:
+        msg: |
+          Could not find the 'Linux x86_64, Intel oneAPI compilers (serial)'
+          option in the WPS configure menu.
+          Menu printed by ./configure:
+          ------------------------------------------------------------
+          {{ wps_menu.stdout }}
+          ------------------------------------------------------------
+      when: wps_config_option | length == 0
+
+    - name: Report the WPS configure answer
+      ansible.builtin.debug:
+        msg:
+          - "Platform option : {{ wps_config_option }}"
+          - "  {{ wps_config_line }}"
+
+    - name: Configure WPS non-interactively
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          export WRF_DIR="{{ wrf_dir }}"
+          export NETCDF="{{ arw_libraries_dir }}"
+          export JASPERLIB="{{ arw_jasper_dir }}/lib"
+          export JASPERINC="{{ arw_jasper_dir }}/include"
+          printf '%s\n' "{{ wps_config_option }}" | ./configure
+        chdir: "{{ wps_dir }}"
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Check that configure.wps was created
+      ansible.builtin.stat:
+        path: "{{ wps_dir }}/configure.wps"
+      register: configure_wps
+      failed_when: not configure_wps.stat.exists
+
+    - name: Point configure.wps at the WRF build and at JasPer 1.900.1
+      ansible.builtin.lineinfile:
+        path: "{{ wps_dir }}/configure.wps"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - regexp: '^WRF_DIR.*'
+          line: "WRF_DIR = {{ wrf_dir }}"
+        # ungrib.exe is linked against JasPer 1.900.1.
+        - regexp: '^COMPRESSION_LIBS.*'
+          line: "COMPRESSION_LIBS    = -L{{ arw_jasper_dir }}/lib -ljasper -L{{ arw_libraries_dir }}/lib -lpng -lz"
+        - regexp: '^COMPRESSION_INC.*'
+          line: "COMPRESSION_INC     = -I{{ arw_jasper_dir }}/include -I{{ arw_libraries_dir }}/include"
+
+    - name: Show the WPS configure summary
+      ansible.builtin.shell:
+        cmd: grep -E "SFC|SCC|DM_FC|DM_CC|WRF_DIR|NETCDF|JASPER|COMPRESSION" configure.wps
+        chdir: "{{ wps_dir }}"
+        executable: /bin/bash
+      register: wps_config_summary
+      changed_when: false
+
+    - name: Report the WPS configure summary
+      ansible.builtin.debug:
+        var: wps_config_summary.stdout_lines
+
+    - name: Compile WPS
+      ansible.builtin.shell:
+        cmd: |
+          # Intel's setvars.sh is sourced with errexit off, as in the
+          # shell scripts: it is not written to run under set -eu.
+          set +eu
+          source "{{ arw_env_file }}"
+          set -eo pipefail
+          export WRF_DIR="{{ wrf_dir }}"
+          ./compile 2>&1 | tee {{ wps_compile_log }}
+        chdir: "{{ wps_dir }}"
+        executable: /bin/bash
+      async: 7200
+      poll: 30
+      changed_when: true
+
+- name: Check the WPS executables
+  ansible.builtin.stat:
+    path: "{{ wps_dir }}/{{ item }}"
+  loop:
+    - geogrid.exe
+    - ungrib.exe
+    - metgrid.exe
+  register: wps_exe_check
+  failed_when: not (wps_exe_check.stat.exists and (wps_exe_check.stat.executable | default(false)))
+
+- name: Check the ungrib runtime libraries
+  ansible.builtin.shell:
+    cmd: |
+      # Intel's setvars.sh is sourced with errexit off, as in the
+      # shell scripts: it is not written to run under set -eu.
+      set +eu
+      source "{{ arw_env_file }}"
+      set -eo pipefail
+      ldd ungrib.exe | grep -E "jasper|png|z|imf|svml" || true
+      if ldd ungrib.exe | grep -q "not found"; then
+        echo "ERROR: ungrib.exe has missing runtime libraries."
+        exit 1
+      fi
+    chdir: "{{ wps_dir }}"
+    executable: /bin/bash
+  register: ungrib_ldd
+  changed_when: false
+
+- name: Report the ungrib runtime libraries
+  ansible.builtin.debug:
+    var: ungrib_ldd.stdout_lines

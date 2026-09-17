@@ -1,0 +1,32 @@
+---
+# Equivalent of the environment variables of
+# build_scripts/01_install_intel_oneapi.sh
+
+oneapi_default_url: "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/71180075-e4e3-4c6f-bbbb-19017ed0cf7d/intel-oneapi-toolkit-2026.0.0.198_offline.sh"
+
+# ONEAPI_INSTALLER: absolute path to an offline installer that is already
+# on the target host. Leave empty to download oneapi_default_url.
+oneapi_installer: ""
+
+# Path to an offline installer on the *control* node, copied to the target
+# before installing. Useful on VMs without internet access.
+oneapi_installer_src: ""
+
+# Where the installer is downloaded/copied to on the target.
+oneapi_download_dir: "/var/tmp/oneapi"
+
+# ONEAPI_USER_INSTALL=1 installs into ${HOME}/intel/oneapi instead of
+# /opt/intel/oneapi and needs no root.
+oneapi_user_install: false
+
+oneapi_system_setvars: "/opt/intel/oneapi/setvars.sh"
+oneapi_user_setvars: "{{ ansible_user_dir }}/intel/oneapi/setvars.sh"
+
+# The compilers that must be on PATH once setvars.sh is sourced.
+oneapi_required_commands:
+  - icx
+  - icpx
+  - ifx
+  - mpiicx
+  - mpiicpx
+  - mpiifx

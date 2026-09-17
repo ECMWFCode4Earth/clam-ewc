@@ -3,7 +3,7 @@
 set -xe
 
 CYC=${CYC:-00} # initialisation time
-FLENGTH=${FLENGTH:-6} # wrf forecast lenght
+FLENGTH=${FLENGTH:-12} # wrf forecast lenght
 
 # RUN_DATE defaults to today's date in UTC, matching the ECMWF open
 # data cycle dates. All three can be overridden from the environment:

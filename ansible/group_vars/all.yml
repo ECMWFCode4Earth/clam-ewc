@@ -1,0 +1,40 @@
+---
+# ============================================================
+# CLAM WRF/WPS - global variables
+#
+# These mirror the environment variables the build_scripts accept.
+# Override them in the inventory, in host_vars/, or on the command
+# line with -e.
+# ============================================================
+
+# Installation root. The scripts default to ${HOME}/ARW; on EWC a
+# directory on the data volume is recommended, e.g. /data/ARW.
+arw_root: "{{ ansible_user_dir }}/ARW"
+
+arw_libraries_dir: "{{ arw_root }}/LIBRARIES"
+arw_src_dir: "{{ arw_root }}/src"
+arw_tests_dir: "{{ arw_root }}/TESTS"
+arw_runs_dir: "{{ arw_root }}/RUNS"
+arw_jasper_dir: "{{ arw_root }}/JASPER-1.900.1"
+
+wrf_dir: "{{ arw_root }}/WRF"
+wps_dir: "{{ arw_root }}/WPS"
+
+# The environment file written by the arw_libs role and sourced by every
+# later build step. This is the Ansible equivalent of
+#   source ${ARW_ROOT}/arw_intel_env.sh
+arw_env_file: "{{ arw_root }}/arw_intel_env.sh"
+
+# Parallel jobs for the third-party libraries (BUILD_JOBS in script 02).
+arw_build_jobs: 4
+
+# Set to true to select the ECMWF open data variant of step 03
+# (03_install_wrf_wps_openData.sh): ungrib is patched so that it can
+# decode the ECMWF open data GRIB2 files.
+wps_ecmwf_opendata: false
+
+# Existing WRF/WPS executables are left alone by default, so the
+# playbook can be re-run cheaply. The shell scripts always run
+# "./clean -a" and rebuild; set these to true for that behaviour.
+wrf_force_rebuild: false
+wps_force_rebuild: false

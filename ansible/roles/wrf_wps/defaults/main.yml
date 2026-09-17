@@ -1,0 +1,25 @@
+---
+# Equivalent of the settings at the top of
+# build_scripts/03_install_wrf_wps.sh
+
+wrf_version: "v4.8.0"
+wps_version: "v4.7.0"
+
+wrf_repo: "https://github.com/wrf-model/WRF.git"
+wps_repo: "https://github.com/wrf-model/WPS.git"
+
+# WRF is built dmpar with mpiifx/mpiicx, and with -j 1: the default
+# "-O3 -ip" made xfortcom use an excessive amount of memory, and a
+# parallel compile is not reliable for em_real.
+wrf_case: "em_real"
+wrf_compile_jobs: 1
+wrf_config_nesting: 1
+
+# ECMWF open data patches for ungrib, used when wps_ecmwf_opendata is
+# true (the 03_install_wrf_wps_openData.sh variant).
+ecmwf_rd_grib2_url: "https://confluence.ecmwf.int/download/attachments/554166848/rd_grib2.F?api=v2"
+ecmwf_vtable_url: "https://confluence.ecmwf.int/download/attachments/554166848/Vtable.ECMWF_GRIB2_opendata?api=v2"
+
+# Compile log names, kept as in the shell scripts.
+wrf_compile_log: "compile_wrf_461_safe.log"
+wps_compile_log: "compile_wps_460.log"

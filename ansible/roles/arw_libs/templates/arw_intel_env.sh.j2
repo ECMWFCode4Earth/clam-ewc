@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Managed by Ansible (roles/arw_libs) - do not edit by hand.
+# Equivalent of the file written by build_scripts/02_install_arw_third_party_libs.sh
+# and sourced by the run_scripts.
+
+source {{ oneapi_setvars }} --force
+
+export ARW_ROOT={{ arw_root }}
+export DIR=${ARW_ROOT}/LIBRARIES
+export SRC=${ARW_ROOT}/src
+export TESTS=${ARW_ROOT}/TESTS
+export RUNS=${ARW_ROOT}/RUNS
+
+export WRF_DIR=${ARW_ROOT}/WRF
+export WPS_DIR=${ARW_ROOT}/WPS
+export JASPER19001=${ARW_ROOT}/JASPER-1.900.1
+
+export CC=icx
+export CXX=icpx
+export FC=ifx
+export F77=ifx
+export F90=ifx
+
+export MPICC=mpiicx
+export MPICXX=mpiicpx
+export MPIFC=mpiifx
+export MPIF77=mpiifx
+export MPIF90=mpiifx
+
+export PATH=${JASPER19001}/bin:${DIR}/bin:${PATH}
+export LD_LIBRARY_PATH=${JASPER19001}/lib:${DIR}/lib:${DIR}/lib64:${LD_LIBRARY_PATH:-}
+export LIBRARY_PATH=${JASPER19001}/lib:${DIR}/lib:${DIR}/lib64:${LIBRARY_PATH:-}
+export CPATH=${JASPER19001}/include:${DIR}/include:${CPATH:-}
+export PKG_CONFIG_PATH=${DIR}/lib/pkgconfig:${DIR}/lib64/pkgconfig:${PKG_CONFIG_PATH:-}
+
+export NETCDF=${DIR}
+export HDF5=${DIR}
+
+export JASPERLIB=${JASPER19001}/lib
+export JASPERINC=${JASPER19001}/include
+export WPS_JASPERLIB=${JASPER19001}/lib
+export WPS_JASPERINC=${JASPER19001}/include
+
+export WRFIO_NCD_LARGE_FILE_SUPPORT=1
+export NETCDF_classic=1
+
+export OMP_NUM_THREADS=1
+export OMP_STACKSIZE=512M
+export KMP_STACKSIZE=512M
+
+# The shell script version calls this unconditionally. Here the failure is
+# tolerated: the Ansible tasks that source this file run under "set -e", and
+# a hard stack limit below "unlimited" must not abort the whole build.
+ulimit -s unlimited 2>/dev/null || true

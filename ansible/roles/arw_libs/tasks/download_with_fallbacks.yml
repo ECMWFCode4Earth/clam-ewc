@@ -1,0 +1,32 @@
+---
+# Ansible equivalent of the download_with_fallbacks() shell function.
+#
+# Input:
+#   dl_dest  absolute path of the file to produce
+#   dl_urls  list of mirrors, tried in order
+#
+# An existing non-empty file is kept, as in the shell script.
+
+- name: "Check for an existing {{ dl_dest | basename }}"
+  ansible.builtin.stat:
+    path: "{{ dl_dest }}"
+  register: dl_stat
+
+- name: "Record whether {{ dl_dest | basename }} still has to be downloaded"
+  ansible.builtin.set_fact:
+    dl_done: "{{ dl_stat.stat.exists and (dl_stat.stat.size | default(0)) > 0 }}"
+
+- name: "Try the mirrors of {{ dl_dest | basename }} in turn"
+  ansible.builtin.include_tasks: download_attempt.yml
+  loop: "{{ dl_urls }}"
+  loop_control:
+    loop_var: dl_url
+
+- name: "Fail when no mirror provided {{ dl_dest | basename }}"
+  ansible.builtin.fail:
+    msg: |
+      Failed to download {{ dl_dest }}
+      Tried:
+      {{ dl_urls | join('
+      ') }}
+  when: not dl_done

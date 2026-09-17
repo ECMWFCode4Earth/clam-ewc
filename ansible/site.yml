@@ -1,0 +1,79 @@
+---
+# ============================================================
+# CLAM WRF/WPS template - Ansible equivalent of build_scripts/
+#
+# Role                | Shell script
+# --------------------+-------------------------------------------
+# system_packages     | 00_install_system_packages.sh
+# intel_oneapi        | 01_install_intel_oneapi.sh
+# arw_libs            | 02_install_arw_third_party_libs.sh
+# wrf_wps             | 03_install_wrf_wps.sh, and with
+#                     | wps_ecmwf_opendata=true the
+#                     | 03_install_wrf_wps_openData.sh variant
+# wps_geog            | 04_download_wps_geog.sh
+# eccodes             | 05_install_eccodes.sh  (optional)
+#
+# Usage:
+#   ansible-playbook site.yml
+#   ansible-playbook site.yml -e arw_root=/data/ARW
+#   ansible-playbook site.yml -e wps_ecmwf_opendata=true -e install_eccodes=true
+#   ansible-playbook site.yml --tags oneapi,libs
+#
+# The roles that install into the system prefix escalate per task, so
+# the play itself runs as the ordinary build user: the software stack
+# under {{ arw_root }} must belong to that user, not to root.
+# ============================================================
+
+- name: Build the CLAM WRF/WPS environment
+  hosts: arw
+  become: false
+  gather_facts: true
+
+  vars:
+    # ecCodes is only needed to inspect the ECMWF open data GRIB2 files;
+    # it is not part of the WRF/WPS build. It is installed by default
+    # together with the open data variant.
+    install_eccodes: "{{ wps_ecmwf_opendata | bool }}"
+
+  pre_tasks:
+    - name: Check the target distribution
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+        fail_msg: >-
+          The build_scripts, and therefore this playbook, were written for
+          Ubuntu 24.04. Found {{ ansible_distribution }}
+          {{ ansible_distribution_version }}.
+        success_msg: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Report the installation layout
+      ansible.builtin.debug:
+        msg:
+          - "ARW_ROOT     = {{ arw_root }}"
+          - "LIBRARIES    = {{ arw_libraries_dir }}"
+          - "SRC          = {{ arw_src_dir }}"
+          - "JASPER19001  = {{ arw_jasper_dir }}"
+          - "WRF_DIR      = {{ wrf_dir }}"
+          - "WPS_DIR      = {{ wps_dir }}"
+          - "ECMWF open data variant: {{ wps_ecmwf_opendata }}"
+          - "ecCodes: {{ install_eccodes }}"
+
+  roles:
+    - role: system_packages
+      tags: [packages, system]
+
+    - role: intel_oneapi
+      tags: [oneapi]
+
+    - role: arw_libs
+      tags: [libs, libraries]
+
+    - role: wrf_wps
+      tags: [wrf, wps]
+
+    - role: wps_geog
+      tags: [geog]
+
+    - role: eccodes
+      tags: [eccodes]
+      when: install_eccodes | bool

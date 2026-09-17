@@ -1,0 +1,51 @@
+---
+# The "Checking required libraries" and "Checking netCDF/compilers"
+# section of build_scripts/03_install_wrf_wps.sh.
+
+- name: Check for the ARW environment file
+  ansible.builtin.stat:
+    path: "{{ arw_env_file }}"
+  register: arw_env_stat
+
+- name: Fail when the ARW environment file is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ arw_env_file }} not found. Build the third-party libraries first
+      (role arw_libs, --tags libs).
+  when: not arw_env_stat.stat.exists
+
+- name: Check the required libraries
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ arw_libraries_dir }}/lib/libz.so"
+    - "{{ arw_libraries_dir }}/lib/libpng16.so"
+    - "{{ arw_libraries_dir }}/lib/libhdf5.so"
+    - "{{ arw_libraries_dir }}/lib/libhdf5_fortran.so"
+    - "{{ arw_libraries_dir }}/lib/libnetcdf.so"
+    - "{{ arw_libraries_dir }}/lib/libnetcdff.so"
+    - "{{ arw_jasper_dir }}/lib/libjasper.so.1"
+  register: wrf_lib_check
+  failed_when: not wrf_lib_check.stat.exists
+
+- name: Check netCDF and the Intel compilers
+  ansible.builtin.shell:
+    cmd: |
+      # Intel's setvars.sh is sourced with errexit off, as in the
+      # shell scripts: it is not written to run under set -eu.
+      set +eu
+      source "{{ arw_env_file }}"
+      set -eo pipefail
+      which nc-config nf-config
+      nc-config --prefix
+      nf-config --prefix
+      nc-config --has-nc4
+      nc-config --has-hdf5
+      which icx ifx mpiicx mpiifx
+    executable: /bin/bash
+  register: wrf_prereq_check
+  changed_when: false
+
+- name: Show the environment WRF and WPS will be built with
+  ansible.builtin.debug:
+    var: wrf_prereq_check.stdout_lines

@@ -1,0 +1,155 @@
+---
+# Equivalent of build_scripts/01_install_intel_oneapi.sh
+#
+#   - if Intel oneAPI is already installed, do nothing
+#   - if an offline installer is available, use it
+#   - otherwise download the default offline installer
+#
+# Default root installation: /opt/intel/oneapi
+
+- name: Look for an existing Intel oneAPI installation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ oneapi_system_setvars }}"
+    - "{{ oneapi_user_setvars }}"
+  register: oneapi_existing
+
+- name: Record which setvars.sh was found
+  ansible.builtin.set_fact:
+    oneapi_setvars: "{{ (oneapi_existing.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first) | default('', true) }}"
+
+- name: Report the existing installation
+  ansible.builtin.debug:
+    msg: "Intel oneAPI already found: {{ oneapi_setvars }}"
+  when: oneapi_setvars | length > 0
+
+# ------------------------------------------------------------
+# Find or download the installer
+# ------------------------------------------------------------
+
+- name: Install Intel oneAPI
+  when: oneapi_setvars | length == 0
+  block:
+    - name: Create the installer staging directory
+      ansible.builtin.file:
+        path: "{{ oneapi_download_dir }}"
+        state: directory
+        mode: "0755"
+      become: true
+
+    - name: Make the staging directory writable by the build user
+      ansible.builtin.file:
+        path: "{{ oneapi_download_dir }}"
+        state: directory
+        owner: "{{ ansible_user_id }}"
+        mode: "0755"
+      become: true
+
+    - name: Check the installer given in oneapi_installer
+      ansible.builtin.stat:
+        path: "{{ oneapi_installer }}"
+      register: oneapi_given
+      when: oneapi_installer | length > 0
+
+    - name: Fail when oneapi_installer was set but the file is missing
+      ansible.builtin.fail:
+        msg: >-
+          oneapi_installer was set, but the file was not found on
+          {{ inventory_hostname }}: {{ oneapi_installer }}
+      when:
+        - oneapi_installer | length > 0
+        - not oneapi_given.stat.exists
+
+    - name: Copy the offline installer from the control node
+      ansible.builtin.copy:
+        src: "{{ oneapi_installer_src }}"
+        dest: "{{ oneapi_download_dir }}/{{ oneapi_installer_src | basename }}"
+        mode: "0755"
+      when:
+        - oneapi_installer | length == 0
+        - oneapi_installer_src | length > 0
+      register: oneapi_copied
+
+    - name: Download the default Intel oneAPI offline installer
+      ansible.builtin.get_url:
+        url: "{{ oneapi_default_url }}"
+        dest: "{{ oneapi_download_dir }}/{{ oneapi_default_url | basename | regex_replace('[?].*$', '') }}"
+        mode: "0755"
+        timeout: 120
+      when:
+        - oneapi_installer | length == 0
+        - oneapi_installer_src | length == 0
+      register: oneapi_downloaded
+
+    - name: Select the installer to run
+      ansible.builtin.set_fact:
+        oneapi_installer_path: >-
+          {{ oneapi_installer if oneapi_installer | length > 0
+             else (oneapi_copied.dest if oneapi_installer_src | length > 0
+                   else oneapi_downloaded.dest) }}
+
+    - name: Make sure the installer is executable
+      ansible.builtin.file:
+        path: "{{ oneapi_installer_path }}"
+        mode: "0755"
+      become: "{{ not oneapi_user_install }}"
+
+    # ------------------------------------------------------------
+    # Install
+    # ------------------------------------------------------------
+
+    - name: Run the Intel oneAPI installer
+      ansible.builtin.command:
+        cmd: "sh {{ oneapi_installer_path }} -a --silent --eula accept"
+        creates: "{{ oneapi_user_setvars if oneapi_user_install else oneapi_system_setvars }}"
+      become: "{{ not oneapi_user_install }}"
+      # A full toolkit installation takes tens of minutes.
+      async: 7200
+      poll: 30
+
+    - name: Locate setvars.sh after the installation
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ oneapi_system_setvars }}"
+        - "{{ oneapi_user_setvars }}"
+      register: oneapi_installed
+
+    - name: Fail when the installation finished without setvars.sh
+      ansible.builtin.fail:
+        msg: "Intel oneAPI installation finished, but setvars.sh was not found."
+      when: oneapi_installed.results | selectattr('stat.exists') | list | length == 0
+
+    - name: Record the setvars.sh of the new installation
+      ansible.builtin.set_fact:
+        oneapi_setvars: "{{ oneapi_installed.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first }}"
+
+# ------------------------------------------------------------
+# Verify
+# ------------------------------------------------------------
+
+- name: Check the Intel compilers after loading the oneAPI environment
+  ansible.builtin.shell:
+    cmd: |
+      # setvars.sh is sourced with errexit off, as in the shell script:
+      # it is not written to run under set -eu.
+      set +eu
+      source "{{ oneapi_setvars }}" --force >/dev/null
+      set -eo pipefail
+      for cmd in {{ oneapi_required_commands | join(' ') }}; do
+        if ! command -v "${cmd}" >/dev/null 2>&1; then
+          echo "ERROR: ${cmd} not found after loading oneAPI environment."
+          exit 1
+        fi
+        echo "  ${cmd} -> $(command -v "${cmd}")"
+      done
+      icx --version | head -1
+      ifx --version | head -1
+    executable: /bin/bash
+  register: oneapi_check
+  changed_when: false
+
+- name: Show the verified compilers
+  ansible.builtin.debug:
+    var: oneapi_check.stdout_lines

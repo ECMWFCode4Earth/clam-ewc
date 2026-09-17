@@ -1,0 +1,31 @@
+---
+# Locate the Intel oneAPI setvars.sh, the same way the shell scripts do.
+#
+# When the intel_oneapi role ran in the same play the fact is already
+# set; these tasks make the role usable on its own, e.g. with
+# --tags libs.
+
+- name: Look for the Intel oneAPI setvars.sh
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "/opt/intel/oneapi/setvars.sh"
+    - "{{ ansible_user_dir }}/intel/oneapi/setvars.sh"
+  register: arw_oneapi_stat
+  when: oneapi_setvars is not defined or oneapi_setvars | length == 0
+
+- name: Record the Intel oneAPI setvars.sh
+  ansible.builtin.set_fact:
+    oneapi_setvars: "{{ arw_oneapi_stat.results | selectattr('stat.exists') | map(attribute='stat.path') | list | first | default('', true) }}"
+  when: oneapi_setvars is not defined or oneapi_setvars | length == 0
+
+- name: Fail when Intel oneAPI is not installed
+  ansible.builtin.fail:
+    msg: >-
+      Intel oneAPI setvars.sh not found. Install Intel oneAPI first
+      (role intel_oneapi, --tags oneapi).
+  when: oneapi_setvars | length == 0
+
+- name: Report the Intel oneAPI environment in use
+  ansible.builtin.debug:
+    msg: "Using Intel oneAPI environment: {{ oneapi_setvars }}"

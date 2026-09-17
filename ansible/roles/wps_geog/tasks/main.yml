@@ -1,0 +1,43 @@
+---
+# Equivalent of build_scripts/04_download_wps_geog.sh
+
+- name: Create the GEOG directory
+  ansible.builtin.file:
+    path: "{{ wps_geog_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Check whether the static geographical data is already unpacked
+  ansible.builtin.stat:
+    path: "{{ wps_geog_extracted_dir }}"
+  register: wps_geog_stat
+
+- name: Download and unpack the WPS static geographical data
+  when: not wps_geog_stat.stat.exists
+  block:
+    # Several GB over a link that is not always fast. The task is not run
+    # with async because get_url/unarchive stream the whole transfer in
+    # one module run; Ansible waits for them without a task timeout.
+    - name: Download the mandatory high resolution static data
+      ansible.builtin.get_url:
+        url: "{{ wps_geog_url }}"
+        dest: "{{ wps_geog_dir }}/{{ wps_geog_url | basename }}"
+        mode: "0644"
+        timeout: 120
+
+    - name: Unpack the static data
+      ansible.builtin.unarchive:
+        src: "{{ wps_geog_dir }}/{{ wps_geog_url | basename }}"
+        dest: "{{ wps_geog_dir }}"
+        remote_src: true
+        creates: "{{ wps_geog_extracted_dir }}"
+
+    - name: Remove the downloaded archive
+      ansible.builtin.file:
+        path: "{{ wps_geog_dir }}/{{ wps_geog_url | basename }}"
+        state: absent
+      when: wps_geog_remove_archive | bool
+
+- name: Report the static data location
+  ansible.builtin.debug:
+    msg: "WPS static geographical data: {{ wps_geog_extracted_dir }}"

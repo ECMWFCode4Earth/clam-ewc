@@ -1,0 +1,20 @@
+---
+# Equivalent of build_scripts/04_download_wps_geog.sh
+#
+# "Mandatory Static Data" from
+# https://www2.mmm.ucar.edu/wrf/users/download/get_sources_wps_geog.html#mandatory
+#
+# This is the highest resolution set; a lowest resolution set is also
+# available from the same page (geog_low_res_mandatory.tar.gz).
+
+wps_geog_url: "https://www2.mmm.ucar.edu/wrf/src/wps_files/geog_high_res_mandatory.tar.gz"
+wps_geog_dir: "{{ arw_root }}/GEOG"
+
+# The archive unpacks into WPS_GEOG/, which is what the run_scripts
+# expect as geog_data_path ($ARW_ROOT/GEOG/WPS_GEOG). Its presence is
+# what marks the download as already done.
+wps_geog_extracted_dir: "{{ wps_geog_dir }}/WPS_GEOG"
+
+# The tarball is several GB; it is deleted after unpacking, as in the
+# shell script. Set to false to keep it.
+wps_geog_remove_archive: true
