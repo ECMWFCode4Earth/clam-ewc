@@ -7,12 +7,15 @@
 
 - name: Import the prerequisite checks
   ansible.builtin.import_tasks: prerequisites.yml
+  tags: [wrf, wps]
 
 - name: Import the WRF build
   ansible.builtin.import_tasks: wrf.yml
+  tags: [wrf]
 
 - name: Import the WPS build
   ansible.builtin.import_tasks: wps.yml
+  tags: [wps]
 
 - name: Report the installation
   ansible.builtin.debug:
@@ -21,3 +24,4 @@
       - "WRF directory: {{ wrf_dir }}"
       - "WPS directory: {{ wps_dir }}"
       - "To load the environment: source {{ arw_env_file }}"
+  tags: [wrf, wps]

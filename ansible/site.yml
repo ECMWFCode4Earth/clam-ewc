@@ -68,8 +68,11 @@
     - role: arw_libs
       tags: [libs, libraries]
 
+    # The role tags wrf.yml with "wrf" and wps.yml with "wps", so
+    # --tags wrf and --tags wps each build only their own part (both
+    # after the shared prerequisite checks).
     - role: wrf_wps
-      tags: [wrf, wps]
+      tags: [wrf_wps]
 
     - role: wps_geog
       tags: [geog]

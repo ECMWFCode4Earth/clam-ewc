@@ -71,10 +71,15 @@ Each role carries tags, so a single step can be run on its own:
 ansible-playbook site.yml --tags packages
 ansible-playbook site.yml --tags oneapi
 ansible-playbook site.yml --tags libs
-ansible-playbook site.yml --tags wrf,wps
+ansible-playbook site.yml --tags wrf          # WRF only
+ansible-playbook site.yml --tags wps          # WPS only
+ansible-playbook site.yml --tags wrf_wps      # both
 ansible-playbook site.yml --tags geog
 ansible-playbook site.yml --tags eccodes -e install_eccodes=true
 ```
+
+`--tags wrf` and `--tags wps` both include the shared prerequisite
+checks (libraries, netCDF, compilers) before building their own part.
 
 The build decisions that the shell scripts arrived at are kept as they
 are: WRF is built `dmpar` with `mpiifx`/`mpiicx`, with `-ip` removed from
@@ -150,13 +155,30 @@ ansible-playbook site.yml -e oneapi_installer_src=~/Downloads/intel-oneapi-toolk
 * **ecCodes tests** are reported but never fatal, as in the script. Look
   for `Test suite:` in the final summary.
 
+## Reading the output
+
+A download mirror that is down prints a red `fatal: ... ...ignoring`
+line and the build carries on with the next mirror, exactly as the
+`download_with_fallbacks` function of script 02 does. It is only a real
+failure if the task *Fail when no mirror provided ...* follows it.
+
+Ansible's default output is terse for long compiles. The nicer YAML
+output needs one collection, which is otherwise not required:
+
+```bash
+ansible-galaxy collection install community.general
+ANSIBLE_STDOUT_CALLBACK=community.general.yaml ansible-playbook site.yml
+```
+
 ## Checking the playbook
 
 ```bash
-ansible-playbook site.yml --syntax-check
-ansible-playbook site.yml --list-tasks
+ansible-playbook -i inventory/hosts.ini site.yml --syntax-check
+ansible-playbook -i inventory/hosts.ini site.yml --list-tasks
 ansible-lint                     # if installed
 ```
+
+Both pass on ansible-core 2.16.3 (the version Ubuntu 24.04 ships).
 
 `--check` (dry run) is *not* useful for this playbook: the later steps
 inspect files that earlier steps create, so a check run reports failures
