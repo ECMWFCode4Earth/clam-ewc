@@ -1,0 +1,83 @@
+# --- OS / editor cruft ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo
+*.bak
+*.orig
+*.tmp
+.idea/
+.vscode/
+*.code-workspace
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Secrets / local env ---
+.env
+.env.*
+*.key
+*.pem
+credentials*
+secrets*
+
+# --- Container images / build artifacts ---
+*.sif
+*.img
+*.simg
+*.tar
+*.tar.gz
+*.tgz
+
+# --- ARW install prefix / runtime data (never commit) ---
+ARW/
+/data/
+RUNS/
+GEOG/
+geog/
+BC/
+LIBRARIES/
+arw_intel_env.sh
+
+# --- Rendered run-script templates (generated from *.in) ---
+run_scripts/namelist.input
+run_scripts/namelist.wps
+run_scripts/run_real.sh
+run_scripts/run_wps.sh
+run_scripts/run_wrf.sh
+run_scripts/run_wrf_multiVMs.sh
+
+# --- Compiled / downloaded third-party sources ---
+*.o
+*.mod
+*.a
+*.so
+*.exe
+*.zip
+*.bz2
+*.gz
+
+# --- WRF/WPS run output ---
+wrfout_*
+wrfrst_*
+wrfbdy_*
+wrfinput_*
+rsl.out.*
+rsl.error.*
+met_em.*
+geo_em.*
+FILE:*
+GRIBFILE.*
+*.grib
+*.grib2
+*.grb
+*.grb2
+namelist.output
