@@ -15,11 +15,19 @@ set -euo pipefail
 #   IMG          image to run: a SIF (clam-wrf.sif) OR a sandbox directory.
 #                Default: clam-wrf.sif  (use a sandbox where SIF/FUSE mount fails)
 #   DATA_DIR     host dir with GEOG/ BC/ RUNS/ (bound to /data). Default: $PWD/data
-#   RUN_SCRIPTS  optional host run_scripts dir to override the bundled copy
+#   RUN_VARIANT  which bundled run_scripts set to drive: default | large | opendata
+#                Default: default
+#                  default  -> /opt/arw/run_scripts          (plain sample dataset)
+#                  large    -> /opt/arw/run_scripts_large     (larger domain)
+#                  opendata -> /opt/arw/run_scripts_opendata  (ECMWF open data;
+#                              needs the image built with WRF_OPENDATA=1 and
+#                              network access for the boundary-condition download)
+#   RUN_SCRIPTS  optional host run_scripts dir to override the selected variant
 #                (handy for editing RUN_DATE/IPs without rebuilding)
 #
 # Usage:
 #   IMG=clam-wrf.sif DATA_DIR=/data/clam ./docker/run_apptainer.sh            # full pipeline
+#   RUN_VARIANT=opendata DATA_DIR=/data/clam ./docker/run_apptainer.sh        # open-data pipeline
 #   ./docker/run_apptainer.sh bash                                            # interactive shell
 #   ./docker/run_apptainer.sh mpirun -np 4 real.exe
 #
@@ -27,6 +35,7 @@ set -euo pipefail
 
 IMG="${IMG:-clam-wrf.sif}"
 DATA_DIR="${DATA_DIR:-$PWD/data}"
+RUN_VARIANT="${RUN_VARIANT:-default}"
 RUN_SCRIPTS="${RUN_SCRIPTS:-}"
 
 if [ ! -e "${IMG}" ]; then
@@ -36,12 +45,24 @@ if [ ! -e "${IMG}" ]; then
   exit 1
 fi
 
-BINDS=(--bind "${DATA_DIR}:/data")
-[ -n "${RUN_SCRIPTS}" ] && BINDS+=(--bind "${RUN_SCRIPTS}:/opt/arw/run_scripts")
+# Map RUN_VARIANT to the bundled run_scripts directory inside the image.
+case "${RUN_VARIANT}" in
+  default)  RS_DIR=/opt/arw/run_scripts ;;
+  large)    RS_DIR=/opt/arw/run_scripts_large ;;
+  opendata) RS_DIR=/opt/arw/run_scripts_opendata ;;
+  *)
+    echo "ERROR: invalid RUN_VARIANT='${RUN_VARIANT}' (use: default|large|opendata)" >&2
+    exit 1
+    ;;
+esac
 
-# Default action: run the full pipeline from the bundled run_scripts.
+BINDS=(--bind "${DATA_DIR}:/data")
+# A host override is bound over the selected variant's directory.
+[ -n "${RUN_SCRIPTS}" ] && BINDS+=(--bind "${RUN_SCRIPTS}:${RS_DIR}")
+
+# Default action: run the full pipeline from the selected run_scripts variant.
 if [ "$#" -eq 0 ]; then
-  set -- bash -c 'cd /opt/arw/run_scripts && exec bash main_wrf.sh'
+  set -- bash -c "cd ${RS_DIR} && exec bash main_wrf.sh"
 fi
 
 # Source the runtime env and make the binaries callable by name, then run.

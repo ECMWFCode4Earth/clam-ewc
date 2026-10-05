@@ -23,11 +23,21 @@ image, so no recompilation is needed at run time.
   unchanged with `ARW_ROOT=/opt/arw`:
   - `build_scripts/02_install_arw_third_party_libs.sh` (zlib, libpng,
     JasPer 1.900.1, HDF5, netCDF-C, netCDF-Fortran)
-  - `build_scripts/03_install_wrf_wps.sh` (WRF dmpar + WPS serial)
+  - `build_scripts/03_install_wrf_wps.sh` (WRF dmpar + WPS serial), **or**
+    `build_scripts/03_install_wrf_wps_openData.sh` when built with
+    `--build-arg WRF_OPENDATA=1`. The open-data variant is a superset: same
+    WRF/WPS plus the ECMWF ungrib patches (`rd_grib2.F` +
+    `Vtable.ECMWF_GRIB2_opendata`) needed to decode the ECMWF open-data GRIB2.
 - **runtime stage** — installs only the Intel oneAPI **runtime redistributables**
   (`intel-oneapi-runtime-*`, no compilers) and copies the compiled executables,
   runtime data and shared libraries from the builder. `openssh-client` is
-  included for Intel MPI's multi-node SSH bootstrap.
+  included for Intel MPI's multi-node SSH bootstrap, and `libeccodes-tools`
+  (ecCodes `grib_set`/`grib_get`) for the open-data `download_bc.sh`, which
+  repacks CCSDS GRIB2 to `grid_simple` for ungrib.
+
+All three run-script sets are bundled so one image can drive any of them (see
+[Run-script variants](#run-script-variants)):
+`run_scripts`, `run_scripts_large`, `run_scripts_opendata`.
 
 Fixed install prefix `/opt/arw` (not `$HOME`) so the image works under any
 Apptainer user. Large static data (GEOG, boundary conditions, run output) is
@@ -68,11 +78,35 @@ This produces `clam-wrf.sif`. Override names if needed:
 IMAGE=clam-wrf:2026.0 SIF=clam-wrf-2026.0.sif ./docker/build_sif.sh
 ```
 
+To build the **ECMWF open-data** WPS variant (patched ungrib, see
+[Run-script variants](#run-script-variants)):
+
+```bash
+WRF_OPENDATA=1 ./docker/build_sif.sh
+```
+
 To build only the Docker image (no SIF):
 
 ```bash
-docker build -f docker/Dockerfile -t clam-wrf:latest .
+docker build -f docker/Dockerfile -t clam-wrf:latest .                       # plain
+docker build -f docker/Dockerfile --build-arg WRF_OPENDATA=1 -t clam-wrf:latest .   # open data
 ```
+
+## Run-script variants
+
+All three run-script sets are baked into the image under `/opt/arw`. Pick one at
+run time with `RUN_VARIANT` (see [section 3](#3-runtime-test)):
+
+| `RUN_VARIANT` | Bundled dir | Initial/boundary conditions | Image build |
+|---------------|-------------|-----------------------------|-------------|
+| `default` *(default)* | `run_scripts` | plain sample dataset | plain or open-data |
+| `large` | `run_scripts_large` | larger domain, same sample dataset | plain or open-data |
+| `opendata` | `run_scripts_opendata` | ECMWF open data (IFS 0.25° GRIB2) | **`WRF_OPENDATA=1`** |
+
+The `opendata` variant requires an image built with `WRF_OPENDATA=1` (patched
+ungrib) and **network access at run time**: its `main_wrf.sh` downloads the
+boundary conditions for the requested cycle and repacks them with ecCodes
+`grib_set` (bundled in the image).
 
 ## 2. Prepare the host data directory
 
@@ -116,6 +150,10 @@ Notes:
 - **Match the date.** `main_wrf.sh` links boundary conditions as
   `ECMWF_${RUN_DATE}${CYC}*.grb` (defaults `20180601`, `00Z`, EUROPE). If you
   change `RUN_DATE`/`CYC`, download BC for that date or the link finds nothing.
+- **Open-data variant (`RUN_VARIANT=opendata`).** Do **not** pre-stage `BC/`:
+  its `main_wrf.sh` downloads the ECMWF open-data GRIB2 for the requested cycle
+  into `$DATA_DIR/BC` at run time (needs network + ecCodes, both in the image).
+  Only `GEOG/` and an empty writable `RUNS/` are required on the host.
 - **Permissions.** Rootless Apptainer runs as your UID, so `$DATA_DIR` and its
   subdirectories must be writable by your user (they are if you created them).
 - Inside the container these map to `$ARW_ROOT/{GEOG,BC,RUNS}` with
@@ -130,7 +168,8 @@ with sensible defaults, so you can place the image and data wherever you like:
 |----------|---------|---------|
 | `IMG` | Path to the image to run — a **SIF file** or a **sandbox directory** | `clam-wrf.sif` |
 | `DATA_DIR` | Host dir holding `GEOG/ BC/ RUNS/`, bound to `/data` | `$PWD/data` |
-| `RUN_SCRIPTS` | Optional host `run_scripts` dir to override the bundled copy | *(use bundled)* |
+| `RUN_VARIANT` | Bundled run-script set: `default` \| `large` \| `opendata` | `default` |
+| `RUN_SCRIPTS` | Optional host run-scripts dir to override the selected variant | *(use bundled)* |
 
 ```bash
 # Example: SIF and data on another disk
@@ -160,6 +199,13 @@ Run the full pipeline (WPS → real → wrf) with no arguments:
 # Full pipeline via the bundled main_wrf.sh
 DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
 
+# Larger domain (same sample dataset)
+RUN_VARIANT=large DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+
+# ECMWF open data (needs an image built with WRF_OPENDATA=1 and network access).
+# main_wrf.sh downloads + repacks the boundary conditions itself.
+RUN_VARIANT=opendata DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+
 # Interactive shell inside the container
 DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash
 
@@ -173,10 +219,11 @@ DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash -c '
 ```
 
 To tweak `RUN_DATE`/`CYC`/IPs without rebuilding, point `RUN_SCRIPTS` at a host
-copy to override the bundled one:
+copy to override the selected variant:
 
 ```bash
 RUN_SCRIPTS=$PWD/run_scripts DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+RUN_VARIANT=opendata RUN_SCRIPTS=$PWD/run_scripts_opendata DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
 ```
 
 Success is `wrfout_d01_*` files in the run directory and `SUCCESS COMPLETE WRF`

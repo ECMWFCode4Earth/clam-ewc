@@ -18,6 +18,12 @@
 # mismatches. Pin to an exact version (e.g. 2026.0.0) for reproducible builds.
 ARG ONEAPI_CHANNEL=all
 
+# Build the ECMWF open-data WPS variant when set to 1. It is a superset of the
+# plain build: same WRF/WPS, plus the ECMWF ungrib patches (rd_grib2.F +
+# Vtable.ECMWF_GRIB2_opendata) needed to decode the open-data GRIB2 files.
+# Left at 0 by default to keep the shipped ungrib behaviour unchanged.
+ARG WRF_OPENDATA=0
+
 # -----------------------------------------------------------------------------
 # Stage 1: builder
 # -----------------------------------------------------------------------------
@@ -49,12 +55,21 @@ RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PR
 ENV ARW_ROOT=/opt/arw
 
 # Build third-party libs then WRF/WPS using the repository scripts as-is.
+# WRF_OPENDATA=1 selects 03_install_wrf_wps_openData.sh (adds the ECMWF
+# open-data ungrib patches); otherwise the plain 03_install_wrf_wps.sh is used.
+ARG WRF_OPENDATA
 COPY build_scripts/02_install_arw_third_party_libs.sh \
      build_scripts/03_install_wrf_wps.sh \
+     build_scripts/03_install_wrf_wps_openData.sh \
      /tmp/build_scripts/
 RUN chmod +x /tmp/build_scripts/*.sh \
     && /tmp/build_scripts/02_install_arw_third_party_libs.sh \
-    && /tmp/build_scripts/03_install_wrf_wps.sh
+    && if [ "${WRF_OPENDATA:-0}" = "1" ]; then \
+         echo "==> Building WPS with ECMWF open-data patches"; \
+         /tmp/build_scripts/03_install_wrf_wps_openData.sh; \
+       else \
+         /tmp/build_scripts/03_install_wrf_wps.sh; \
+       fi
 
 # -----------------------------------------------------------------------------
 # Stage 2: runtime (slim)
@@ -72,12 +87,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     I_MPI_HYDRA_BOOTSTRAP=ssh
 
 # Minimal runtime packages:
-#   tcsh/csh  -> WPS link_grib.csh
-#   perl      -> WRF/WPS helper scripts
+#   tcsh/csh       -> WPS link_grib.csh
+#   perl           -> WRF/WPS helper scripts
 #   openssh-client -> Intel MPI (Hydra) ssh bootstrap for multi-node runs
+#   curl/wget      -> boundary-condition downloads (download_bc.sh)
+#   libeccodes-tools -> grib_set/grib_get, used by the open-data download_bc.sh
+#                       to repack CCSDS GRIB2 to grid_simple for ungrib
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      tcsh csh perl openssh-client ca-certificates gnupg wget \
-      libgomp1 procps hostname \
+      tcsh csh perl openssh-client ca-certificates gnupg wget curl \
+      libeccodes-tools libgomp1 procps hostname \
     && rm -rf /var/lib/apt/lists/*
 
 # Intel oneAPI runtime redistributables (compiler + Fortran + OpenMP) plus the
@@ -106,8 +124,14 @@ COPY --from=builder /opt/arw/JASPER-1.900.1/lib  /opt/arw/JASPER-1.900.1/lib
 # keeps working without the full oneAPI setvars.sh / compilers.
 COPY docker/arw_runtime_env.sh /opt/arw/arw_intel_env.sh
 
-# Bundle the run scripts so no host bind is needed to drive a run.
-COPY run_scripts /opt/arw/run_scripts
+# Bundle the run scripts so no host bind is needed to drive a run. All three
+# variants are included; run_apptainer.sh's RUN_VARIANT picks which one runs:
+#   run_scripts          -> plain sample dataset (default)
+#   run_scripts_large     -> larger domain, same sample dataset
+#   run_scripts_opendata  -> ECMWF open data (needs the WRF_OPENDATA=1 build)
+COPY run_scripts          /opt/arw/run_scripts
+COPY run_scripts_large    /opt/arw/run_scripts_large
+COPY run_scripts_opendata /opt/arw/run_scripts_opendata
 
 # Symlink the mutable dirs under $ARW_ROOT to the /data bind mount so a single
 # `--bind $DATA_DIR:/data` is enough and the run_scripts (which use

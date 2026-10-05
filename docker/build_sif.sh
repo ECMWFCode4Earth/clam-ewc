@@ -11,6 +11,8 @@ set -euo pipefail
 #
 # Overridable:
 #   IMAGE=clam-wrf:latest  SIF=clam-wrf.sif  ./docker/build_sif.sh
+#   WRF_OPENDATA=1  ./docker/build_sif.sh            # build the ECMWF open-data
+#     WPS variant (patched ungrib); default 0 keeps the shipped ungrib
 #   SANDBOX=1  SBX=clam-sbx  ./docker/build_sif.sh   # also emit a sandbox dir
 #     (use a sandbox on hosts where the SIF/FUSE mount fails, e.g. broken
 #      fuse-overlayfs: the sandbox runs from a plain directory, no squashfuse)
@@ -18,12 +20,15 @@ set -euo pipefail
 IMAGE="${IMAGE:-clam-wrf:latest}"
 SIF="${SIF:-clam-wrf.sif}"
 SBX="${SBX:-clam-sbx}"
+WRF_OPENDATA="${WRF_OPENDATA:-0}"
 
 # Repository root (directory containing build_scripts/ and docker/).
 CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "==> Building Docker image ${IMAGE}"
-docker build -t "${IMAGE}" -f "${CONTEXT_DIR}/docker/Dockerfile" "${CONTEXT_DIR}"
+echo "==> Building Docker image ${IMAGE} (WRF_OPENDATA=${WRF_OPENDATA})"
+docker build \
+  --build-arg WRF_OPENDATA="${WRF_OPENDATA}" \
+  -t "${IMAGE}" -f "${CONTEXT_DIR}/docker/Dockerfile" "${CONTEXT_DIR}"
 
 echo "==> Converting ${IMAGE} to ${SIF}"
 # Pull straight from the local Docker daemon; no registry required.
