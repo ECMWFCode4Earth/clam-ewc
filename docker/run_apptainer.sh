@@ -45,12 +45,18 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # Source the runtime env and make the binaries callable by name, then run.
-exec apptainer exec \
+# No `exec` here so any post-run steps below still execute.
+apptainer exec \
   "${BINDS[@]}" \
   "${IMG}" \
   bash -c 'source /opt/arw/arw_intel_env.sh
            export PATH="/opt/arw/WRF/main:/opt/arw/WPS:${PATH}"
            exec "$@"' bash "$@"
+rc=$?
+
+# Add any post-run steps here (they run after the container exits).
+
+exit "$rc"
 
 # -----------------------------------------------------------------------------
 # Multi-node runs (EWC VMs or HPC).

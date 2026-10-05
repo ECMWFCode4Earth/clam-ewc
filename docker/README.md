@@ -46,6 +46,14 @@ Install the toolchain on Ubuntu 24.04 or Rocky/RHEL 9 with the helper scripts:
 ./docker/install_apptainer.sh    # Apptainer (build host + run nodes)
 ```
 
+The helper and launcher scripts must be executable. If you get
+`permission denied` (e.g. running `./docker/run_apptainer.sh`), add the exec bit
+once after cloning:
+
+```bash
+chmod +x docker/*.sh
+```
+
 ## 1. Build the image and SIF
 
 Run from the **repository root** (the directory containing `build_scripts/`):
@@ -114,6 +122,20 @@ Notes:
   `ARW_ROOT=/opt/arw` (via the bind mount / symlinks).
 
 ## 3. Runtime test
+
+The launcher `docker/run_apptainer.sh` reads three environment variables, all
+with sensible defaults, so you can place the image and data wherever you like:
+
+| Variable | Meaning | Default |
+|----------|---------|---------|
+| `IMG` | Path to the image to run — a **SIF file** or a **sandbox directory** | `clam-wrf.sif` |
+| `DATA_DIR` | Host dir holding `GEOG/ BC/ RUNS/`, bound to `/data` | `$PWD/data` |
+| `RUN_SCRIPTS` | Optional host `run_scripts` dir to override the bundled copy | *(use bundled)* |
+
+```bash
+# Example: SIF and data on another disk
+IMG=/mnt/data1/clam-wrf.sif DATA_DIR=/mnt/data1/clam ./docker/run_apptainer.sh
+```
 
 ### 3a. Smoke test — binaries and libraries resolve
 
