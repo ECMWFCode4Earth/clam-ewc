@@ -61,6 +61,7 @@
           - "SIF source = {{ 'registry build: ' ~ clam_sif_registry if clam_sif_registry | length > 0 else 'copy from control node: ' ~ clam_sif_src }}"
           - "SIF_DEST   = {{ clam_sif_dest }}"
           - "DATA_DIR   = {{ clam_data_dir }}"
+          - "GEOG download = {{ clam_download_geog | bool }} (-> {{ clam_data_dir }}/GEOG/WPS_GEOG)"
           - "Apptainer  = {{ 'GitHub .deb v' ~ apptainer_version if apptainer_version | length > 0 else 'apptainer/ppa' }}"
           - "Intel MPI (host, multi-node) = {{ clam_install_oneapi | bool }}"
 

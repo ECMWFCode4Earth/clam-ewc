@@ -13,3 +13,16 @@ clam_data_subdirs:
   - GEOG
   - BC
   - RUNS
+
+# Download the mandatory high-res WPS static geographical data into the host
+# data dir (GEOG/WPS_GEOG), bound into the container at /data. Several GB;
+# idempotent - skipped when WPS_GEOG/ already exists. Equivalent of running
+# `ARW_ROOT=$DATA_DIR ./build_scripts/04_download_wps_geog.sh`.
+clam_download_geog: true
+clam_geog_url: "https://www2.mmm.ucar.edu/wrf/src/wps_files/geog_high_res_mandatory.tar.gz"
+# GEOG subdir of the host data dir and the extracted dataset directory. The
+# archive unpacks into WPS_GEOG/, which is geog_data_path inside the container.
+clam_geog_dir: "{{ clam_data_dir }}/GEOG"
+clam_geog_extracted_dir: "{{ clam_geog_dir }}/WPS_GEOG"
+# Delete the multi-GB tarball after unpacking. Set false to keep it.
+clam_geog_remove_archive: true
