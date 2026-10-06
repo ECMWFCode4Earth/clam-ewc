@@ -13,6 +13,7 @@ image, so no recompilation is needed at run time.
 | [`arw_runtime_env.sh`](arw_runtime_env.sh) | Slim runtime environment installed as `/opt/arw/arw_intel_env.sh`. |
 | [`build_sif.sh`](build_sif.sh) | Builds the image and converts it to a SIF. |
 | [`run_apptainer.sh`](run_apptainer.sh) | Rootless launcher that bind-mounts host data into the container. |
+| [`run_multinode.sh`](run_multinode.sh) | Multi-node orchestrator: WPS + `real.exe` on one node in the container, then `wrf.exe` across nodes via the host `mpirun`. |
 | [`install_docker.sh`](install_docker.sh) | Installs Docker Engine on Ubuntu 24.04 or Rocky/RHEL 9. |
 | [`install_apptainer.sh`](install_apptainer.sh) | Installs Apptainer on Ubuntu 24.04 or Rocky/RHEL 9. |
 
@@ -218,13 +219,24 @@ DATA_DIR=$DATA_DIR ./container/run_apptainer.sh bash -c '
 '
 ```
 
-To tweak `RUN_DATE`/`CYC`/IPs without rebuilding, point `RUN_SCRIPTS` at a host
-copy to override the selected variant:
+### Overriding the bundled run scripts (`RUN_SCRIPTS`)
+
+The three run-script sets are baked into the image under `/opt/arw/run_scripts*`.
+To tweak `RUN_DATE`/`CYC`/`FLENGTH`/IPs or edit a script **without rebuilding**,
+point `RUN_SCRIPTS` at a host copy: the launcher bind-mounts it **over** the
+selected variant's directory inside the image
+(`--bind $RUN_SCRIPTS:/opt/arw/run_scripts<variant>`), so your host copy is what
+runs:
 
 ```bash
+# edit a host copy first, then run the selected variant from it:
 RUN_SCRIPTS=$PWD/run_scripts DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 RUN_VARIANT=opendata RUN_SCRIPTS=$PWD/run_scripts_opendata DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 ```
+
+`RUN_SCRIPTS` must match the selected `RUN_VARIANT` (bind the
+`run_scripts_opendata` copy when `RUN_VARIANT=opendata`, etc.). The same override
+works with `run_multinode.sh` (see [section 4](#4-multi-node-runs-ewc-vms--hpc)).
 
 Success is `wrfout_d01_*` files in the run directory and `SUCCESS COMPLETE WRF`
 in `rsl.out.0000`.
@@ -246,8 +258,72 @@ IMG=clam-sbx DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 
 ## 4. Multi-node runs (EWC VMs / HPC)
 
-The image bundles Intel MPI and uses SSH for multi-node launch. The same SIF
-must exist at the same path on every node, with passwordless SSH between nodes.
+Use the orchestrator [`run_multinode.sh`](run_multinode.sh). It splits the run so
+the serial/low-core stages stay on one node and only `wrf.exe` spans nodes:
+
+- **Phase 1 — single node, inside the container:** runs the bundled `main_wrf.sh`
+  (prep → WPS → `real.exe`). It is invoked with `MULTINODE_HOST_WRF=1`, which
+  makes `run_real.sh` stop right after `real.exe` instead of launching `wrf.exe`
+  in-container.
+- **Phase 2 — multiple nodes:** the **host** `mpirun` launches one
+  `apptainer exec … wrf.exe` per rank, so the executable resolves **inside** the
+  container on every node. The script sources the host Intel oneAPI environment
+  first so the host `mpirun` (Hydra launcher) is on `PATH`.
+
+> Why the launcher runs on the host: if `mpirun` runs *inside* the container, the
+> remote Hydra proxy spawns on the bare host, where `/opt/arw/WRF/main/wrf.exe`
+> does not exist → `execvp error on file wrf.exe (No such file or directory)`.
+
+**Requirements on every node:**
+- Apptainer + the **same SIF at the same path**.
+- Intel oneAPI (at least Intel MPI) at the same path, **same release as the
+  image** — the host `mpirun` launches; `wrf.exe` uses the container's
+  ABI-compatible Intel MPI.
+- Passwordless SSH between nodes.
+- `DATA_DIR` on a **shared filesystem, identical path everywhere**, so the run
+  directory (`namelist.input`, `wrfinput`, `wrfbdy`) is visible to all ranks.
+
+`run_multinode.sh` environment variables:
+
+| Variable | Meaning | Default |
+|----------|---------|---------|
+| `IMG` / `SIF` | Image to run (SIF or sandbox dir) | `clam-wrf.sif` |
+| `DATA_DIR` | Host dir with `GEOG/ BC/ RUNS/`, bound to `/data` | `$PWD/data` |
+| `RUN_VARIANT` | Bundled run-script set: `default` \| `large` \| `opendata` | `default` |
+| `RUN_SCRIPTS` | Host run-scripts dir bound over the selected variant (see [§3](#overriding-the-bundled-run-scripts-run_scripts)) | *(use bundled)* |
+| `HOSTS` | **Required** — comma-separated node list, e.g. `vm01,vm03` | — |
+| `PPN` | Ranks per node (phase 2) | `16` |
+| `NP` | Total ranks (phase 2) | `PPN × #hosts` |
+| `CYCLE` | Run-dir name under `RUNS` (e.g. `2018060100_europe`) | newest dir under `DATA_DIR/RUNS` |
+| `ONEAPI_SETVARS` | Host `setvars.sh` sourced for `mpirun` | `/opt/intel/oneapi/setvars.sh` |
+| `RUN_DATE`/`CYC`/`FLENGTH`/`REAL_NP` | Forwarded into phase 1 (honored by the `opendata` variant) | *(variant default)* |
+| `SKIP_PHASE1` | `1` to skip phase 1 and reuse an existing run dir | `0` |
+
+```bash
+# Two VMs, 16 ranks each (32 total). SIF + DATA_DIR on a shared mount.
+HOSTS=vm01,vm03 PPN=16 DATA_DIR=/data/clam IMG=/mnt/data1/clam-wrf.sif \
+  ./container/run_multinode.sh
+
+# Open-data variant across two nodes
+RUN_VARIANT=opendata HOSTS=vm01,vm03 PPN=16 DATA_DIR=/data/clam \
+  IMG=/mnt/data1/clam-wrf.sif ./container/run_multinode.sh
+
+# Edit scripts on the host without rebuilding (RUN_SCRIPTS bound over the variant)
+RUN_SCRIPTS=$PWD/run_scripts HOSTS=vm01,vm03 PPN=16 DATA_DIR=/data/clam \
+  IMG=/mnt/data1/clam-wrf.sif ./container/run_multinode.sh
+
+# Re-run only wrf.exe (reuse the run dir prepared earlier)
+SKIP_PHASE1=1 HOSTS=vm01,vm03 PPN=16 CYCLE=2018060100_europe \
+  DATA_DIR=/data/clam IMG=/mnt/data1/clam-wrf.sif ./container/run_multinode.sh
+```
+
+Success is `wrfout_d01_*` files and `SUCCESS COMPLETE WRF` in
+`RUNS/<cycle>/rsl.out.0000`.
+
+### Manual / Slurm launch (advanced)
+
+If you prefer to drive `mpirun` yourself, the same SIF works directly. The host
+Intel MPI must match the image release; bind `DATA_DIR` identically on all nodes:
 
 ```bash
 cat > hosts <<'EOF'
