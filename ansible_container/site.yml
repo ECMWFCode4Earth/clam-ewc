@@ -28,7 +28,7 @@
 # ============================================================
 
 - name: Deploy the CLAM WRF/WPS container
-  hosts: clam
+  hosts: all
   become: false
   gather_facts: true
 
