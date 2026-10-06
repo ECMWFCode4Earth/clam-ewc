@@ -1,0 +1,26 @@
+# Copy to hosts.ini and edit.
+#
+# Deployment targets for the CLAM WRF/WPS container (Ubuntu 24.04).
+# The playbook is normally run against the VMs that will run the model.
+
+[clam]
+# Remote EWC VMs:
+# clam-vm-1 ansible_host=10.0.0.11 ansible_user=ubuntu
+# clam-vm-2 ansible_host=10.0.0.12 ansible_user=ubuntu
+#
+# Or the machine you are sitting on:
+# localhost ansible_connection=local
+
+[clam:vars]
+# Where to place the deploy dir and the data dir on the target:
+# clam_deploy_dir=/opt/clam
+# clam_data_dir=/data/clam
+#
+# Path to the prebuilt SIF on the Ansible control node:
+# clam_sif_src=/mnt/data1/clam-wrf.sif
+#
+# Or build the SIF on the target from a container registry instead of copying:
+# clam_sif_registry=docker://ghcr.io/org/clam-wrf:latest
+#
+# Multi-node hosts also need the host Intel MPI launcher (install on need):
+# clam_install_oneapi=true

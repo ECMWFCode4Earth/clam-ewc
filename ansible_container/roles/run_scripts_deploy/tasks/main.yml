@@ -1,0 +1,31 @@
+---
+# Deploy the container launcher scripts, the run_scripts variants, and the
+# host data directory skeleton.
+
+- name: Ensure the deploy container dir exists
+  ansible.builtin.file:
+    path: "{{ clam_deploy_dir }}/container"
+    state: directory
+    mode: "0755"
+
+- name: Deploy the container launcher scripts
+  ansible.builtin.copy:
+    src: "{{ clam_container_src }}/{{ item }}"
+    dest: "{{ clam_deploy_dir }}/container/{{ item }}"
+    mode: "0755"
+  loop: "{{ clam_launcher_scripts }}"
+
+- name: Deploy the run-script variants
+  ansible.builtin.copy:
+    src: "{{ clam_repo_root }}/{{ item }}/"
+    dest: "{{ clam_deploy_dir }}/{{ item }}/"
+    mode: preserve
+  loop: "{{ clam_run_variants }}"
+
+- name: Create the host data directory skeleton (bound at /data)
+  when: clam_create_data_dirs | bool
+  ansible.builtin.file:
+    path: "{{ clam_data_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ clam_data_subdirs }}"

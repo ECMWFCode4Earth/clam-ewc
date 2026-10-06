@@ -1,0 +1,51 @@
+---
+# Provide the SIF on each target in one of two modes:
+#   Mode A (clam_sif_registry set): build it on the target from a container
+#           registry reference with `apptainer build`.
+#   Mode B (default): copy a prebuilt SIF from the Ansible control node.
+
+- name: Ensure the deploy directory exists
+  ansible.builtin.file:
+    path: "{{ clam_deploy_dir }}"
+    state: directory
+    mode: "0755"
+
+# ----- Mode A: build from a container registry reference (on the target) -----
+- name: Build the SIF from a container registry reference
+  when: clam_sif_registry | length > 0
+  # Hide the task when registry credentials are passed in the environment.
+  no_log: "{{ (clam_registry_username | default('') | length > 0) }}"
+  environment: "{{ clam_registry_env }}"
+  ansible.builtin.command:
+    cmd: "apptainer build {{ '--force ' if clam_sif_force_build | bool else '' }}{{ clam_sif_dest }} {{ clam_sif_registry }}"
+    creates: "{{ omit if clam_sif_force_build | bool else clam_sif_dest }}"
+  # Pulling the image layers and assembling the SIF can take several minutes.
+  async: 3600
+  poll: 20
+
+# ----- Mode B: copy a prebuilt SIF from the control node (default) -----
+- name: Check the SIF exists on the control node
+  when: clam_sif_registry | length == 0
+  ansible.builtin.stat:
+    path: "{{ clam_sif_src }}"
+  delegate_to: localhost
+  become: false
+  register: clam_sif_local
+
+- name: Fail if the SIF is missing on the control node
+  when: clam_sif_registry | length == 0
+  ansible.builtin.assert:
+    that:
+      - clam_sif_local.stat.exists
+    fail_msg: >-
+      SIF not found at {{ clam_sif_src }} on the control node. Build it with
+      ../container/build_sif.sh, set clam_sif_src=/path/to/clam-wrf.sif, or set
+      clam_sif_registry=docker://<ref> to build from a registry on the target.
+    success_msg: "Found SIF {{ clam_sif_src }}"
+
+- name: Copy the SIF to the target
+  when: clam_sif_registry | length == 0
+  ansible.builtin.copy:
+    src: "{{ clam_sif_src }}"
+    dest: "{{ clam_sif_dest }}"
+    mode: "{{ clam_sif_mode }}"

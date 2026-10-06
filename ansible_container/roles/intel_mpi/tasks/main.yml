@@ -1,0 +1,60 @@
+---
+# Install Intel MPI (host mpirun/Hydra) from the Intel oneAPI APT repo. Only
+# runs when enabled (clam_install_oneapi), since single-node runs need Apptainer
+# only. Mirrors the oneAPI APT setup used by ../../container/Dockerfile.
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gnupg
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Fetch the Intel oneAPI APT GPG key
+  ansible.builtin.get_url:
+    url: "{{ intel_mpi_apt_key_url }}"
+    dest: /tmp/intel-oneapi.key
+    mode: "0644"
+  become: true
+
+- name: Install the Intel oneAPI keyring
+  ansible.builtin.command:
+    cmd: "gpg --dearmor --yes -o {{ intel_mpi_apt_keyring }} /tmp/intel-oneapi.key"
+    creates: "{{ intel_mpi_apt_keyring }}"
+  become: true
+
+- name: Add the Intel oneAPI APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ intel_mpi_apt_repo }}"
+    filename: oneAPI
+    state: present
+    update_cache: true
+  become: true
+
+- name: Install Intel MPI (mpirun/Hydra + runtime)
+  ansible.builtin.apt:
+    name: "{{ intel_mpi_packages }}"
+    state: present
+    update_cache: true
+  become: true
+
+- name: Verify mpirun resolves after sourcing setvars.sh
+  ansible.builtin.shell:
+    cmd: |
+      # setvars.sh is not written to run under set -eu.
+      set +eu
+      source "{{ intel_mpi_setvars }}" --force >/dev/null
+      set -eo pipefail
+      command -v mpirun >/dev/null || { echo "ERROR: mpirun not found after setvars"; exit 1; }
+      mpirun --version | head -1
+    executable: /bin/bash
+  register: intel_mpi_check
+  changed_when: false
+
+- name: Show the Intel MPI launcher
+  ansible.builtin.debug:
+    var: intel_mpi_check.stdout_lines
