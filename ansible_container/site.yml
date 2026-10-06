@@ -32,13 +32,12 @@
   become: false
   gather_facts: true
 
-  vars_prompt:
+  vars:
     # Private-registry password for building the SIF from clam_sif_registry.
     # Non-interactive runs (no TTY) use the empty default; passing
-    # -e clam_registry_password=... or an encrypted -e @vault.yml skips the
-    # prompt. Press Enter to skip for public images / copy mode.
+    # -e clam_registry_password=... or an encrypted -e @vault.yml. 
     - name: clam_registry_password
-      prompt: "Private registry password (Enter to skip for public images)"
+      #prompt: "Private registry password (Enter to skip for public images)"
       private: true
       default: ""
       confirm: false
