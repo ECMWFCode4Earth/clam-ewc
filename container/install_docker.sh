@@ -9,10 +9,10 @@ set -euo pipefail
 # user to the "docker" group so the daemon can be used without sudo.
 #
 # Usage:
-#   ./docker/install_docker.sh
+#   ./container/install_docker.sh
 #
 # Optional:
-#   ADD_USER_TO_DOCKER_GROUP=0 ./docker/install_docker.sh   # skip group change
+#   ADD_USER_TO_DOCKER_GROUP=0 ./container/install_docker.sh   # skip group change
 # =============================================================================
 
 ADD_USER_TO_DOCKER_GROUP="${ADD_USER_TO_DOCKER_GROUP:-1}"

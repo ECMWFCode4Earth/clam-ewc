@@ -10,7 +10,7 @@
 #              the builder. Designed to run rootless under Apptainer.
 #
 # Build from the repository root (the directory containing build_scripts/):
-#   docker build -f docker/Dockerfile -t clam-wrf:latest .
+#   docker build -f container/Dockerfile -t clam-wrf:latest .
 # =============================================================================
 
 # Intel oneAPI release used for BOTH stages. Keep the builder compilers and the
@@ -122,7 +122,7 @@ COPY --from=builder /opt/arw/JASPER-1.900.1/lib  /opt/arw/JASPER-1.900.1/lib
 
 # Slim runtime environment, named so the run_scripts' `$ARW_ROOT/arw_intel_env.sh`
 # keeps working without the full oneAPI setvars.sh / compilers.
-COPY docker/arw_runtime_env.sh /opt/arw/arw_intel_env.sh
+COPY container/arw_runtime_env.sh /opt/arw/arw_intel_env.sh
 
 # Bundle the run scripts so no host bind is needed to drive a run. All three
 # variants are included; run_apptainer.sh's RUN_VARIANT picks which one runs:

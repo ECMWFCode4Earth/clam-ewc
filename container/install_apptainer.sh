@@ -9,10 +9,10 @@ set -euo pipefail
 # per distro and falls back to the official GitHub release packages.
 #
 # Usage:
-#   ./docker/install_apptainer.sh
+#   ./container/install_apptainer.sh
 #
 # Optional:
-#   APPTAINER_VERSION=1.3.6 ./docker/install_apptainer.sh   # force GitHub package
+#   APPTAINER_VERSION=1.3.6 ./container/install_apptainer.sh   # force GitHub package
 # =============================================================================
 
 APPTAINER_VERSION="${APPTAINER_VERSION:-}"

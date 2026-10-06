@@ -14,8 +14,8 @@ and HPC. Built with the **Intel oneAPI** compilers (`icx`/`icpx`/`ifx`) and
 
 - `build_scripts/` — ordered install steps (`00`→`04`), run once on a fresh VM.
 - `run_scripts/` — templated (`*.in`) job scripts; `main_wrf.sh` orchestrates a run.
-- `docker/` — multi-stage Docker → Apptainer image that bakes in the compiled
-  binaries so **no recompilation** is needed. See `docker/README.md`.
+- `container/` — multi-stage Docker → Apptainer image that bakes in the compiled
+  binaries so **no recompilation** is needed. See `container/README.md`.
 
 ## Key conventions
 
@@ -47,12 +47,12 @@ must stay that way — the Docker builder reuses them unchanged.
 Prefer the prebuilt image over recompiling. From the repo root:
 
 ```bash
-./docker/build_sif.sh                                  # docker build → clam-wrf.sif
-DATA_DIR=/data/clam ./docker/run_apptainer.sh bash     # rootless Apptainer
+./container/build_sif.sh                               # docker build → clam-wrf.sif
+DATA_DIR=/data/clam ./container/run_apptainer.sh bash  # rootless Apptainer
 ```
 
 Runtime data (GEOG, BC, RUNS) is **bind-mounted** at `/data`, never baked in.
-Multi-node uses the container's Intel MPI over SSH (see `docker/run_apptainer.sh`).
+Multi-node uses the container's Intel MPI over SSH (see `container/run_apptainer.sh`).
 
 ## Run a forecast
 

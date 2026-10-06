@@ -2,7 +2,7 @@
 .git
 **/.git
 **/*.sif
-docker/*.sif
+container/*.sif
 
 # Repo content not needed by the image build (run_scripts IS needed: bundled).
 README.md

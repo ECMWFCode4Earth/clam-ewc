@@ -26,10 +26,10 @@ set -euo pipefail
 #                (handy for editing RUN_DATE/IPs without rebuilding)
 #
 # Usage:
-#   IMG=clam-wrf.sif DATA_DIR=/data/clam ./docker/run_apptainer.sh            # full pipeline
-#   RUN_VARIANT=opendata DATA_DIR=/data/clam ./docker/run_apptainer.sh        # open-data pipeline
-#   ./docker/run_apptainer.sh bash                                            # interactive shell
-#   ./docker/run_apptainer.sh mpirun -np 4 real.exe
+#   IMG=clam-wrf.sif DATA_DIR=/data/clam ./container/run_apptainer.sh            # full pipeline
+#   RUN_VARIANT=opendata DATA_DIR=/data/clam ./container/run_apptainer.sh        # open-data pipeline
+#   ./container/run_apptainer.sh bash                                            # interactive shell
+#   ./container/run_apptainer.sh mpirun -np 4 real.exe
 #
 # With no arguments it runs the full orchestrator (main_wrf.sh: WPS -> real -> wrf).
 
@@ -40,7 +40,7 @@ RUN_SCRIPTS="${RUN_SCRIPTS:-}"
 
 if [ ! -e "${IMG}" ]; then
   echo "ERROR: image not found: ${IMG} (SIF file or sandbox directory)" >&2
-  echo "Build a SIF with: ./docker/build_sif.sh" >&2
+  echo "Build a SIF with: ./container/build_sif.sh" >&2
   echo "or a sandbox with: apptainer build --sandbox clam-sbx clam-wrf.sif" >&2
   exit 1
 fi

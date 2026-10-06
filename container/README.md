@@ -52,16 +52,16 @@ Apptainer user. Large static data (GEOG, boundary conditions, run output) is
 Install the toolchain on Ubuntu 24.04 or Rocky/RHEL 9 with the helper scripts:
 
 ```bash
-./docker/install_docker.sh       # Docker Engine (build host)
-./docker/install_apptainer.sh    # Apptainer (build host + run nodes)
+./container/install_docker.sh       # Docker Engine (build host)
+./container/install_apptainer.sh    # Apptainer (build host + run nodes)
 ```
 
 The helper and launcher scripts must be executable. If you get
-`permission denied` (e.g. running `./docker/run_apptainer.sh`), add the exec bit
+`permission denied` (e.g. running `./container/run_apptainer.sh`), add the exec bit
 once after cloning:
 
 ```bash
-chmod +x docker/*.sh
+chmod +x container/*.sh
 ```
 
 ## 1. Build the image and SIF
@@ -69,27 +69,27 @@ chmod +x docker/*.sh
 Run from the **repository root** (the directory containing `build_scripts/`):
 
 ```bash
-./docker/build_sif.sh
+./container/build_sif.sh
 ```
 
 This produces `clam-wrf.sif`. Override names if needed:
 
 ```bash
-IMAGE=clam-wrf:2026.0 SIF=clam-wrf-2026.0.sif ./docker/build_sif.sh
+IMAGE=clam-wrf:2026.0 SIF=clam-wrf-2026.0.sif ./container/build_sif.sh
 ```
 
 To build the **ECMWF open-data** WPS variant (patched ungrib, see
 [Run-script variants](#run-script-variants)):
 
 ```bash
-WRF_OPENDATA=1 ./docker/build_sif.sh
+WRF_OPENDATA=1 ./container/build_sif.sh
 ```
 
 To build only the Docker image (no SIF):
 
 ```bash
-docker build -f docker/Dockerfile -t clam-wrf:latest .                       # plain
-docker build -f docker/Dockerfile --build-arg WRF_OPENDATA=1 -t clam-wrf:latest .   # open data
+docker build -f container/Dockerfile -t clam-wrf:latest .                       # plain
+docker build -f container/Dockerfile --build-arg WRF_OPENDATA=1 -t clam-wrf:latest .   # open data
 ```
 
 ## Run-script variants
@@ -161,7 +161,7 @@ Notes:
 
 ## 3. Runtime test
 
-The launcher `docker/run_apptainer.sh` reads three environment variables, all
+The launcher `container/run_apptainer.sh` reads three environment variables, all
 with sensible defaults, so you can place the image and data wherever you like:
 
 | Variable | Meaning | Default |
@@ -173,13 +173,13 @@ with sensible defaults, so you can place the image and data wherever you like:
 
 ```bash
 # Example: SIF and data on another disk
-IMG=/mnt/data1/clam-wrf.sif DATA_DIR=/mnt/data1/clam ./docker/run_apptainer.sh
+IMG=/mnt/data1/clam-wrf.sif DATA_DIR=/mnt/data1/clam ./container/run_apptainer.sh
 ```
 
 ### 3a. Smoke test — binaries and libraries resolve
 
 ```bash
-DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash -c '
+DATA_DIR=$DATA_DIR ./container/run_apptainer.sh bash -c '
   ldd /opt/arw/WRF/main/wrf.exe | grep -E "not found" && echo "MISSING LIBS" || echo "wrf.exe OK"
   ldd /opt/arw/WPS/ungrib.exe   | grep -E "not found" && echo "MISSING LIBS" || echo "ungrib.exe OK"
   which mpirun && mpirun --version | head -1
@@ -197,20 +197,20 @@ Run the full pipeline (WPS → real → wrf) with no arguments:
 
 ```bash
 # Full pipeline via the bundled main_wrf.sh
-DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 
 # Larger domain (same sample dataset)
-RUN_VARIANT=large DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+RUN_VARIANT=large DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 
 # ECMWF open data (needs an image built with WRF_OPENDATA=1 and network access).
 # main_wrf.sh downloads + repacks the boundary conditions itself.
-RUN_VARIANT=opendata DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+RUN_VARIANT=opendata DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 
 # Interactive shell inside the container
-DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash
+DATA_DIR=$DATA_DIR ./container/run_apptainer.sh bash
 
 # Or drive individual steps from a prepared run directory:
-DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh bash -c '
+DATA_DIR=$DATA_DIR ./container/run_apptainer.sh bash -c '
   cd /opt/arw/RUNS/<cycle>
   ungrib.exe && geogrid.exe && metgrid.exe
   mpirun -np 4  real.exe
@@ -222,8 +222,8 @@ To tweak `RUN_DATE`/`CYC`/IPs without rebuilding, point `RUN_SCRIPTS` at a host
 copy to override the selected variant:
 
 ```bash
-RUN_SCRIPTS=$PWD/run_scripts DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
-RUN_VARIANT=opendata RUN_SCRIPTS=$PWD/run_scripts_opendata DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+RUN_SCRIPTS=$PWD/run_scripts DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
+RUN_VARIANT=opendata RUN_SCRIPTS=$PWD/run_scripts_opendata DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 ```
 
 Success is `wrfout_d01_*` files in the run directory and `SUCCESS COMPLETE WRF`
@@ -240,8 +240,8 @@ On hosts where rootless Apptainer cannot mount the SIF (broken
 sandbox and point `IMG` at it; everything else is identical:
 
 ```bash
-apptainer build --sandbox clam-sbx clam-wrf.sif      # or: SANDBOX=1 ./docker/build_sif.sh
-IMG=clam-sbx DATA_DIR=$DATA_DIR ./docker/run_apptainer.sh
+apptainer build --sandbox clam-sbx clam-wrf.sif      # or: SANDBOX=1 ./container/build_sif.sh
+IMG=clam-sbx DATA_DIR=$DATA_DIR ./container/run_apptainer.sh
 ```
 
 ## 4. Multi-node runs (EWC VMs / HPC)
