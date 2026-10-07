@@ -16,7 +16,7 @@ then installs Apptainer and copies the SIF + launcher scripts to each run node.
 | `apptainer`          | Installs Apptainer (mirrors [`../container/install_apptainer.sh`](../container/install_apptainer.sh)); ensures rootless user namespaces. |
 | `intel_mpi`          | Installs the host **Intel MPI** launcher (`mpirun`/Hydra) from the Intel oneAPI APT repo. **Only runs when `clam_install_oneapi=true`** — needed for multi-node runs. |
 | `sif_deploy`         | Provides `clam-wrf.sif` on each target: **copies** a prebuilt file from the control node, or **builds** it there from a container registry reference (`clam_sif_registry`). |
-| `run_scripts_deploy` | Copies the launcher scripts (`run_apptainer.sh`, `run_multinode.sh`) and the `run_scripts*` variants, and creates the `GEOG/ BC/ RUNS/` data skeleton. |
+| `run_scripts_deploy` | Copies the launcher scripts (`run_apptainer.sh`, `run_multinode.sh`) and the `run_scripts*` variants, creates the `GEOG/ BC/ RUNS/` data skeleton, and (optionally) downloads the mandatory high-res WPS static data into `GEOG/WPS_GEOG`. |
 
 ### Single node vs. multi node
 
@@ -101,12 +101,15 @@ Run only part of it with tags:
 ansible-playbook site.yml --tags apptainer   # install Apptainer only
 ansible-playbook site.yml --tags oneapi      # install host Intel MPI only
 ansible-playbook site.yml --tags deploy      # copy SIF + scripts only
+ansible-playbook site.yml --tags geog        # download WPS static data only
+ansible-playbook site.yml --skip-tags geog   # everything except the GEOG download
 ```
 
 ## Variables
 
-Defined in [`group_vars/all.yml`](group_vars/all.yml); override with `-e` or in
-the inventory.
+Most are defined in [`group_vars/all.yml`](group_vars/all.yml); the `clam_geog_*`
+variables are [`run_scripts_deploy`](roles/run_scripts_deploy/defaults/main.yml)
+role defaults. Override any of them with `-e` or in the inventory.
 
 | Variable            | Meaning                                                      | Default |
 |---------------------|--------------------------------------------------------------|---------|
@@ -117,6 +120,9 @@ the inventory.
 | `clam_registry_username` / `clam_registry_password` | Credentials for a **private** registry (registry build only). Password is prompted or passed via Vault/`-e` — see [Registry credentials](#registry-credentials) | `""` |
 | `clam_deploy_dir`   | Where launcher scripts + run_scripts land on the target      | `~/clam-ewc` |
 | `clam_data_dir`     | Host dir bound into the container at `/data` (`GEOG/BC/RUNS`) | `~/clam-data` |
+| `clam_download_geog` | Download the mandatory high-res WPS static data into `{{ clam_data_dir }}/GEOG/WPS_GEOG` during deploy. Idempotent (skipped when `WPS_GEOG/` already exists). Set `false` to skip — see [Skipping the GEOG download](#skipping-the-geog-download). | `true` |
+| `clam_geog_url`     | Source tarball for the static data (`geog_high_res_mandatory.tar.gz`) | UCAR WPS files URL |
+| `clam_geog_remove_archive` | Delete the multi-GB tarball after unpacking                 | `true` |
 | `clam_run_variants` | Which run-script variants to deploy                          | `default`, `large`, `opendata` |
 | `apptainer_version` | Empty = Ubuntu `apptainer/ppa`; set e.g. `1.3.6` for the GitHub `.deb` | `""` |
 | `clam_install_oneapi` | Install the host Intel MPI launcher (`intel_mpi` role). **Set `true` for multi-node hosts.** | `false` |
@@ -175,10 +181,33 @@ the password by one of:
 The build task runs with `no_log`, so the password is never printed in task
 output.
 
+## Skipping the GEOG download
+
+By default `run_scripts_deploy` downloads the mandatory high-res WPS static data
+(several GB) into `{{ clam_data_dir }}/GEOG/WPS_GEOG` — the Ansible equivalent of
+`ARW_ROOT=$DATA_DIR ./build_scripts/04_download_wps_geog.sh`. The step is
+**idempotent**: it is skipped automatically when `GEOG/WPS_GEOG` already exists.
+
+Skip it explicitly when the data is already staged or lives on a shared mount:
+
+```bash
+# One-off: skip the download for this run
+ansible-playbook site.yml -e clam_download_geog=false
+
+# Or by tag: run everything except the GEOG download
+ansible-playbook site.yml --skip-tags geog
+
+# Run only the GEOG download
+ansible-playbook site.yml --tags geog
+```
+
+Set `clam_download_geog: false` in `group_vars/all.yml` to make the skip permanent.
+
 ## After deployment
 
-Stage the input data (GEOG + boundary conditions) under `clam_data_dir`, then
-launch from the deploy dir on a host. See [`../container/README.md`](../container/README.md)
+Boundary-condition data still has to be staged under `clam_data_dir` (the GEOG
+static data is downloaded by the playbook unless you skipped it). Then launch
+from the deploy dir on a host. See [`../container/README.md`](../container/README.md)
 for data staging and the full run reference.
 
 ```bash
