@@ -34,14 +34,10 @@
 
   vars:
     # Private-registry password for building the SIF from clam_sif_registry.
-    # Non-interactive runs (no TTY) use the empty default; passing
-    # -e clam_registry_password=... or an encrypted -e @vault.yml. 
-    - name: clam_registry_password
-      #prompt: "Private registry password (Enter to skip for public images)"
-      private: true
-      default: ""
-      confirm: false
-      unsafe: true
+    # Non-interactive only: never prompted. Defaults to empty (skip, for public
+    # images); supply for a private registry via -e clam_registry_password=...
+    # or an encrypted -e @vault.yml.
+    clam_registry_password: ""
 
   pre_tasks:
     - name: Check the target distribution
