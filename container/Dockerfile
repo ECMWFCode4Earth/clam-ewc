@@ -32,7 +32,8 @@ FROM ubuntu:24.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System build packages (mirrors 00_install_system_packages.sh, minus sudo).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade pulls the latest security-patched base packages.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       build-essential gcc g++ gfortran make m4 perl csh tcsh file \
       wget curl tar gzip bzip2 xz-utils patch pkg-config \
       libc6-dev linux-libc-dev unzip git ca-certificates gnupg \
@@ -93,25 +94,51 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #   curl/wget      -> boundary-condition downloads (download_bc.sh)
 #   libeccodes-tools -> grib_set/grib_get, used by the open-data download_bc.sh
 #                       to repack CCSDS GRIB2 to grid_simple for ungrib
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade pulls the latest security-patched base packages into the
+# runtime image (addresses base-image CVEs flagged by image scanners).
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       tcsh csh perl openssh-client ca-certificates gnupg wget curl \
       libeccodes-tools libgomp1 procps hostname \
     && rm -rf /var/lib/apt/lists/*
 
-# Intel oneAPI runtime redistributables (compiler + Fortran + OpenMP) plus the
-# full Intel MPI runtime. intel-oneapi-mpi (not intel-oneapi-runtime-mpi) is
-# required because only it ships the mpirun / mpiexec.hydra launchers, not just
-# the MPI libraries. Same repo/release as the builder so runtimes match.
+# Intel oneAPI apt repository, kept in its own small layer so the large Intel
+# package installs below each land in a separate, independently-pushable layer.
 RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
       | gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-      > /etc/apt/sources.list.d/oneAPI.list \
-    && apt-get update && apt-get install -y --no-install-recommends \
+      > /etc/apt/sources.list.d/oneAPI.list
+
+# Intel oneAPI compiler + Fortran + OpenMP runtime redistributables. Split from
+# the MPI install below so the ~1.8 GB of Intel runtime is spread across several
+# smaller layers instead of one, which pushes/pulls far better over a registry.
+RUN apt-get update && apt-get install -y --no-install-recommends \
       intel-oneapi-runtime-libs \
       intel-oneapi-runtime-fortran \
       intel-oneapi-runtime-openmp \
+    && rm -rf /var/lib/apt/lists/*
+
+# Intel MPI runtime in its own layer. intel-oneapi-mpi (not
+# intel-oneapi-runtime-mpi) is required because only it ships the mpirun /
+# mpiexec.hydra launchers, not just the MPI libraries. Same repo/release as the
+# builder so runtimes match.
+RUN apt-get update && apt-get install -y --no-install-recommends \
       intel-oneapi-mpi \
     && rm -rf /var/lib/apt/lists/*
+
+# Drop non-runtime Intel artefacts that are not needed to execute the model
+# (debug MPI libs, benchmarks, examples, docs/man). Guarded so a layout change
+# in a future oneAPI release cannot break the build.
+RUN set -eux; \
+    rm -rf /opt/intel/oneapi/mpi/*/lib/debug \
+           /opt/intel/oneapi/mpi/*/lib/debug_mt \
+           /opt/intel/oneapi/mpi/*/benchmarks \
+           /opt/intel/oneapi/mpi/*/examples \
+           /opt/intel/oneapi/mpi/*/etc/tune* \
+           /opt/intel/oneapi/*/share/doc \
+           /opt/intel/oneapi/*/share/man \
+           /opt/intel/oneapi/*/documentation \
+           /opt/intel/oneapi/conda_channel \
+      2>/dev/null || true
 
 # Compiled artifacts from the builder (executables, runtime data, shared libs).
 COPY --from=builder /opt/arw/WRF/main            /opt/arw/WRF/main
