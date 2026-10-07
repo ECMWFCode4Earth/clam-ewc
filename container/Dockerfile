@@ -13,10 +13,15 @@
 #   docker build -f container/Dockerfile -t clam-wrf:latest .
 # =============================================================================
 
-# Intel oneAPI release used for BOTH stages. Keep the builder compilers and the
-# runtime redistributables on the same release to avoid Fortran/MPI symbol
-# mismatches. Pin to an exact version (e.g. 2026.0.0) for reproducible builds.
-ARG ONEAPI_CHANNEL=all
+# Intel oneAPI release used for BOTH stages. Builder compilers and runtime
+# redistributables MUST share a release to avoid Fortran/MPI symbol mismatches.
+# Pinned to match build_scripts/01_install_intel_oneapi.sh (2026.0.0.198).
+# Intel MPI ships on its own 2021.x line; 2021.18 is the version bundled in
+# toolkit 2026.0.0.198 (verified on a script-configured host). The apt globs
+# pin the release while letting Intel's build suffix float; confirm a pinned
+# version still exists in the rolling repo with `apt-cache madison`.
+ARG ONEAPI_VERSION=2026.0.0
+ARG IMPI_VERSION=2021.18
 
 # Build the ECMWF open-data WPS variant when set to 1. It is a superset of the
 # plain build: same WRF/WPS, plus the ECMWF ungrib patches (rd_grib2.F +
@@ -30,6 +35,8 @@ ARG WRF_OPENDATA=0
 FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
+ARG ONEAPI_VERSION
+ARG IMPI_VERSION
 
 # System build packages (mirrors 00_install_system_packages.sh, minus sudo).
 # apt-get upgrade pulls the latest security-patched base packages.
@@ -47,9 +54,9 @@ RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PR
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
       > /etc/apt/sources.list.d/oneAPI.list \
     && apt-get update && apt-get install -y --no-install-recommends \
-      intel-oneapi-compiler-dpcpp-cpp \
-      intel-oneapi-compiler-fortran \
-      intel-oneapi-mpi-devel \
+      intel-oneapi-compiler-dpcpp-cpp=${ONEAPI_VERSION}-* \
+      intel-oneapi-compiler-fortran=${ONEAPI_VERSION}-* \
+      intel-oneapi-mpi-devel=${IMPI_VERSION}* \
     && rm -rf /var/lib/apt/lists/*
 
 # Fixed prefix so the image does not depend on any user's $HOME.
@@ -86,6 +93,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     OMP_STACKSIZE=512M \
     KMP_STACKSIZE=512M \
     I_MPI_HYDRA_BOOTSTRAP=ssh
+ARG ONEAPI_VERSION
+ARG IMPI_VERSION
 
 # Minimal runtime packages:
 #   tcsh/csh       -> WPS link_grib.csh
@@ -112,9 +121,9 @@ RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PR
 # the MPI install below so the ~1.8 GB of Intel runtime is spread across several
 # smaller layers instead of one, which pushes/pulls far better over a registry.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      intel-oneapi-runtime-libs \
-      intel-oneapi-runtime-fortran \
-      intel-oneapi-runtime-openmp \
+      intel-oneapi-runtime-libs=${ONEAPI_VERSION}-* \
+      intel-oneapi-runtime-fortran=${ONEAPI_VERSION}-* \
+      intel-oneapi-runtime-openmp=${ONEAPI_VERSION}-* \
     && rm -rf /var/lib/apt/lists/*
 
 # Intel MPI runtime in its own layer. intel-oneapi-mpi (not
@@ -122,7 +131,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # mpiexec.hydra launchers, not just the MPI libraries. Same repo/release as the
 # builder so runtimes match.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      intel-oneapi-mpi \
+      intel-oneapi-mpi=${IMPI_VERSION}* \
     && rm -rf /var/lib/apt/lists/*
 
 # Drop non-runtime Intel artefacts that are not needed to execute the model
