@@ -15,17 +15,15 @@
 
 # Intel oneAPI release used for BOTH stages. Builder compilers and runtime
 # redistributables MUST share a release to avoid Fortran/MPI symbol mismatches.
-# The apt repo is a ROLLING repo. intel-oneapi-runtime-libs is a meta-package
-# that pulls ...-runtime-compilers and ...-runtime-dpcpp-sycl-core WITHOUT a
-# version constraint, so they float to the newest build and that newest build
-# hard-requires the newest ...-runtime-openmp. Pinning only openmp/fortran then
-# conflicts. The fix is to pin EVERY runtime package below to major 
-# ${ONEAPI_VERSION}; a newer Intel release then
-# cannot break this build. Any release still present in the repo works (confirm
-# with `apt-cache madison <package>`); bump only if Intel prunes it. 2026.0.0
-# matches build_scripts/01_install_intel_oneapi.sh and the ansible offline
-# installer (2026.0.0.198). Intel MPI ships on its own 2021.x line; 2021.18 is
-# bundled with this toolkit.
+# The apt repo is a ROLLING repo. The intel-oneapi-runtime-libs meta-package
+# cannot be pinned to an old release because it drags in the DPC++/SYCL/OpenCL
+# stack whose deps are written ">= newest"; the runtime stage therefore installs
+# only the base Fortran/OpenMP/compiler runtimes WRF links (see below), which DO
+# pin cleanly. Any release still present in the repo works (confirm with
+# `apt-cache madison <package>`); bump only if Intel prunes it. 2026.0.0 matches
+# build_scripts/01_install_intel_oneapi.sh and the ansible offline installer
+# (2026.0.0.198). Intel MPI ships on its own 2021.x line; 2021.18 is bundled
+# with this toolkit.
 ARG ONEAPI_VERSION=2026.0.0
 ARG IMPI_VERSION=2021.18
 
@@ -123,16 +121,17 @@ RUN wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PR
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
       > /etc/apt/sources.list.d/oneAPI.list
 
-# Intel oneAPI compiler + Fortran + OpenMP runtime redistributables. Split from
-# the MPI install below so the ~1.8 GB of Intel runtime is spread across several
-# smaller layers instead of one, which pushes/pulls far better over a registry.
-# runtime-compilers and runtime-dpcpp-sycl-core are pinned explicitly (not just
-# pulled by runtime-libs) so the rolling repo cannot float them to a newer
-# release and break the openmp dependency.
+# Intel oneAPI Fortran + OpenMP runtime redistributables, pinned to the release.
+# We deliberately do NOT install the intel-oneapi-runtime-libs meta-package: it
+# drags in the DPC++/SYCL/OpenCL stack (runtime-dpcpp-cpp/-sycl-core/-opencl)
+# whose deps are written ">= newest", which makes an old release unpinnable in
+# this rolling repo (the openmp conflict). WRF/WPS is pure Fortran+OpenMP+MPI and
+# links only the three base runtimes below (libifcore/libifport, libimf/libsvml/
+# libintlc, libiomp5), so dropping the meta-package both fixes the pin and slims
+# the image. All three are pinned to the same ${ONEAPI_VERSION} for a consistent
+# set. Split from the MPI install so the Intel runtime spreads across layers.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      intel-oneapi-runtime-libs=${ONEAPI_VERSION}-* \
       intel-oneapi-runtime-compilers=${ONEAPI_VERSION}-* \
-      intel-oneapi-runtime-dpcpp-sycl-core=${ONEAPI_VERSION}-* \
       intel-oneapi-runtime-fortran=${ONEAPI_VERSION}-* \
       intel-oneapi-runtime-openmp=${ONEAPI_VERSION}-* \
     && rm -rf /var/lib/apt/lists/*
