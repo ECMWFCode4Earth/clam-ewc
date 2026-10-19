@@ -5,10 +5,12 @@
 # ABI-compatible Intel MPI, so the host release should match the image, which
 # is built from this same APT repo (see ../../container/Dockerfile).
 #
-# Pin the Intel MPI release to MATCH the image's Intel MPI (the Dockerfile and
-# the ../../ansible intel_oneapi role track the 2026.0 oneAPI toolkit). The
-# release metapackage is "intel-oneapi-mpi-<version>". Set intel_mpi_version to
-# "" to take the latest available in the repo instead of pinning.
+# Pin the Intel MPI release to MATCH the image's Intel MPI. This tracks the
+# Intel MPI line only (the Dockerfile pins it via IMPI_VERSION, currently the
+# 2021.18 / 2026.0 line) and is INDEPENDENT of the oneAPI compiler release the
+# image tracks, so it does NOT follow a compiler-only bump in the Dockerfile.
+# The release metapackage is "intel-oneapi-mpi-<version>". Set intel_mpi_version
+# to "" to take the latest available in the repo instead of pinning.
 # Verify the image's version with:
 #   apptainer exec clam-wrf.sif bash -lc \
 #     'source /opt/intel/oneapi/setvars.sh >/dev/null; mpirun --version'
