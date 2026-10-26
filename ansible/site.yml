@@ -1,39 +1,53 @@
 ---
 # ============================================================
-# CLAM WRF/WPS template - Ansible equivalent of build_scripts/
+# CLAM WRF/WPS - unified Ansible playbook
 #
-# Role                | Shell script
-# --------------------+-------------------------------------------
-# system_packages     | 00_install_system_packages.sh
-# intel_oneapi        | 01_install_intel_oneapi.sh
-# arw_libs            | 02_install_arw_third_party_libs.sh
-# wrf_wps             | 03_install_wrf_wps.sh, and with
-#                     | wps_ecmwf_opendata=true the
-#                     | 03_install_wrf_wps_openData.sh variant
-# wps_geog            | 04_download_wps_geog.sh
-# eccodes             | 05_install_eccodes.sh  (optional)
+# One playbook, two modes selected by the boolean clam_use_container
+# (group_vars/all.yml, default true):
+#
+#   clam_use_container=true  -> DEPLOY the prebuilt Apptainer image
+#     Role               | Purpose
+#     -------------------+-------------------------------------------
+#     apptainer          | install Apptainer (container/install_apptainer.sh)
+#     intel_mpi          | host Intel MPI launcher, ONLY when
+#                        | clam_install_oneapi=true (multi-node runs)
+#     sif_deploy         | provide clam-wrf.sif (copy or registry build)
+#     run_scripts_deploy | copy launcher + run_scripts, data skeleton
+#
+#   clam_use_container=false -> BUILD WRF/WPS from source
+#     Role               | Shell script
+#     -------------------+-------------------------------------------
+#     system_packages    | 00_install_system_packages.sh
+#     intel_oneapi       | 01_install_intel_oneapi.sh
+#     arw_libs           | 02_install_arw_third_party_libs.sh
+#     wrf_wps            | 03_install_wrf_wps.sh, and with
+#                        | wps_ecmwf_opendata=true the openData variant
+#     wps_geog           | 04_download_wps_geog.sh
+#     eccodes            | 05_install_eccodes.sh  (optional)
 #
 # Usage:
-#   ansible-playbook site.yml
-#   ansible-playbook site.yml -e arw_root=/data/ARW
-#   ansible-playbook site.yml -e wps_ecmwf_opendata=true -e install_eccodes=true
-#   ansible-playbook site.yml --tags oneapi,libs
+#   ansible-playbook site.yml                              # container deploy
+#   ansible-playbook site.yml -e clam_sif_src=/path/clam-wrf.sif
+#   ansible-playbook site.yml -e clam_install_oneapi=true  # multi-node host
+#   ansible-playbook site.yml -e clam_use_container=false  # build from source
+#   ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW
 #
-# The roles that install into the system prefix escalate per task, so
-# the play itself runs as the ordinary build user: the software stack
-# under {{ arw_root }} must belong to that user, not to root.
+# All roles run as the ordinary user and escalate per task where needed;
+# do not run the whole play with --become.
 # ============================================================
 
-- name: Build the CLAM WRF/WPS environment
-  hosts: arw
+- name: Deploy or build the CLAM WRF/WPS environment
+  hosts: all
   become: false
   gather_facts: true
 
   vars:
-    # ecCodes is only needed to inspect the ECMWF open data GRIB2 files;
-    # it is not part of the WRF/WPS build. It is installed by default
-    # together with the open data variant.
+    # Source build: ecCodes is only needed to inspect the ECMWF open data
+    # GRIB2 files; installed by default together with the open data variant.
     install_eccodes: "{{ wps_ecmwf_opendata | bool }}"
+    # Container deploy: private-registry password for building the SIF from
+    # clam_sif_registry. Non-interactive only; defaults to empty (public).
+    clam_registry_password: ""
 
   pre_tasks:
     - name: Check the target distribution
@@ -41,14 +55,28 @@
         that:
           - ansible_distribution == "Ubuntu"
         fail_msg: >-
-          The build_scripts, and therefore this playbook, were written for
-          Ubuntu 24.04. Found {{ ansible_distribution }}
-          {{ ansible_distribution_version }}.
+          This playbook targets Ubuntu 24.04. Found
+          {{ ansible_distribution }} {{ ansible_distribution_version }}.
         success_msg: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
 
-    - name: Report the installation layout
+    - name: Report the deployment layout
+      when: clam_use_container | bool
       ansible.builtin.debug:
         msg:
+          - "MODE       = container deploy (clam_use_container=true)"
+          - "DEPLOY_DIR = {{ clam_deploy_dir }}"
+          - "SIF source = {{ 'registry build: ' ~ clam_sif_registry if clam_sif_registry | length > 0 else 'copy from control node: ' ~ clam_sif_src }}"
+          - "SIF_DEST   = {{ clam_sif_dest }}"
+          - "DATA_DIR   = {{ clam_data_dir }}"
+          - "GEOG download = {{ clam_download_geog | bool }} (-> {{ clam_data_dir }}/GEOG/WPS_GEOG)"
+          - "Apptainer  = {{ 'GitHub .deb v' ~ apptainer_version if apptainer_version | length > 0 else 'apptainer/ppa' }}"
+          - "Intel MPI (host, multi-node) = {{ clam_install_oneapi | bool }}"
+
+    - name: Report the installation layout
+      when: not (clam_use_container | bool)
+      ansible.builtin.debug:
+        msg:
+          - "MODE         = source build (clam_use_container=false)"
           - "ARW_ROOT     = {{ arw_root }}"
           - "LIBRARIES    = {{ arw_libraries_dir }}"
           - "SRC          = {{ arw_src_dir }}"
@@ -59,24 +87,62 @@
           - "ecCodes: {{ install_eccodes }}"
 
   roles:
+    # --- Container deploy (clam_use_container=true) -----------------
+    - role: apptainer
+      tags: [apptainer]
+      when: clam_use_container | bool
+
+    # Host Intel MPI launcher, installed ONLY when enabled (multi-node runs).
+    - role: intel_mpi
+      tags: [oneapi, mpi]
+      when:
+        - clam_use_container | bool
+        - clam_install_oneapi | bool
+
+    - role: sif_deploy
+      tags: [sif, deploy]
+      when: clam_use_container | bool
+
+    - role: run_scripts_deploy
+      tags: [scripts, deploy]
+      when: clam_use_container | bool
+
+    # --- Source build (clam_use_container=false) --------------------
     - role: system_packages
       tags: [packages, system]
+      when: not (clam_use_container | bool)
 
     - role: intel_oneapi
       tags: [oneapi]
+      when: not (clam_use_container | bool)
 
     - role: arw_libs
       tags: [libs, libraries]
+      when: not (clam_use_container | bool)
 
     # The role tags wrf.yml with "wrf" and wps.yml with "wps", so
     # --tags wrf and --tags wps each build only their own part (both
     # after the shared prerequisite checks).
     - role: wrf_wps
       tags: [wrf_wps]
+      when: not (clam_use_container | bool)
 
     - role: wps_geog
       tags: [geog]
+      when: not (clam_use_container | bool)
 
     - role: eccodes
       tags: [eccodes]
-      when: install_eccodes | bool
+      when:
+        - not (clam_use_container | bool)
+        - install_eccodes | bool
+
+  post_tasks:
+    - name: How to launch a run
+      when: clam_use_container | bool
+      ansible.builtin.debug:
+        msg:
+          - "Single node:"
+          - "  IMG={{ clam_sif_dest }} DATA_DIR={{ clam_data_dir }} {{ clam_deploy_dir }}/container/run_apptainer.sh"
+          - "Multi node (edit HOSTS):"
+          - "  HOSTS=vm01,vm03 PPN=16 IMG={{ clam_sif_dest }} DATA_DIR={{ clam_data_dir }} {{ clam_deploy_dir }}/container/run_multinode.sh"

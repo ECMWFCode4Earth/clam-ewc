@@ -62,7 +62,7 @@
     group: root
     mode: "0644"
     content: |
-      # Managed by ansible_container/roles/apptainer - rootless Apptainer.
+      # Managed by ansible/roles/apptainer - rootless Apptainer.
       user.max_user_namespaces = {{ apptainer_max_user_namespaces }}
   notify: Reload sysctl
 

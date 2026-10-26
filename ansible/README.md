@@ -1,59 +1,152 @@
-# Ansible playbook for the CLAM WRF/WPS build
+# Ansible playbook for CLAM WRF/WPS (build or deploy)
 
-This directory is an Ansible version of the scripts in
-[`build_scripts/`](../build_scripts/). It installs exactly the same
-software stack — Ubuntu build packages, Intel oneAPI, the third-party
-libraries, WRF, WPS, the WPS static geographical data and, optionally,
-ecCodes — on one or more Ubuntu 24.04 machines.
+This directory is a single Ansible playbook with **two modes**, selected by
+the boolean `clam_use_container` in
+[`group_vars/all.yml`](group_vars/all.yml) (default `true`):
 
-The shell scripts remain the reference implementation. Use the playbook
-when you want to build several VMs from one place, re-run a step without
-worrying about what was already done, or keep the build settings in one
-file instead of in environment variables.
+| `clam_use_container` | What runs | Roles |
+|----------------------|-----------|-------|
+| `true` (default)     | **Deploy** the prebuilt Apptainer image + run scripts to one or more run nodes. Does *not* compile anything. | `apptainer`, `intel_mpi`, `sif_deploy`, `run_scripts_deploy` |
+| `false`              | **Build** WRF/WPS from source — the Ansible version of [`build_scripts/`](../build_scripts/). | `system_packages`, `intel_oneapi`, `arw_libs`, `wrf_wps`, `wps_geog`, `eccodes` |
+
+The two sets of roles and variables are disjoint; the selector simply gates
+which set runs. Pick the mode on the command line (`-e clam_use_container=…`)
+or per host in the inventory.
 
 ## Requirements
 
-On the machine you run Ansible *from* (the control node):
+On the control node (where you run Ansible):
 
 ```bash
 sudo apt install -y ansible          # or: pipx install ansible-core
 ```
 
-Only `ansible-core` is needed — the playbook uses `ansible.builtin`
-modules only, so no Galaxy collections have to be installed.
+Only `ansible-core` is needed — the playbook uses `ansible.builtin` modules
+only, so no Galaxy collections are required.
 
-On the machine being built (the target):
-
-* Ubuntu 24.04
-* SSH access as a normal user with passwordless `sudo`
-* enough disk space under `arw_root` (the full stack with the high
-  resolution static data needs roughly 60 GB)
-
-The target can be the control node itself; see `localhost` in the
-inventory example.
-
-## Quick start
+Each target host is Ubuntu 24.04 with SSH access as a normal user with
+passwordless `sudo`. The target can be the control node itself (see
+`localhost` in the inventory example).
 
 ```bash
 cd ansible
 cp inventory/hosts.ini.example inventory/hosts.ini
 $EDITOR inventory/hosts.ini
-
-# The whole build, sample initial and boundary conditions:
-ansible-playbook site.yml
-
-# On EWC, with the stack on the data volume:
-ansible-playbook site.yml -e arw_root=/data/ARW
-
-# ECMWF open data GRIB2 variant, which also installs ecCodes:
-ansible-playbook site.yml -e arw_root=/data/ARW -e wps_ecmwf_opendata=true
 ```
 
-The full build takes several hours, most of it in the WRF compile. Run
-it under `tmux`, `screen` or `nohup` so that a dropped connection from
-your workstation does not interrupt it.
+---
 
-## What maps to what
+## Container deploy mode (`clam_use_container=true`, default)
+
+Deploys the **prebuilt** Apptainer image and the run scripts. The heavy build
+happens once when you build the SIF with
+[`../container/build_sif.sh`](../container/build_sif.sh); this playbook then
+installs Apptainer and copies the SIF + launcher scripts to each run node.
+
+| Role                 | Purpose |
+|----------------------|---------|
+| `apptainer`          | Installs Apptainer (mirrors [`../container/install_apptainer.sh`](../container/install_apptainer.sh)); ensures rootless user namespaces. |
+| `intel_mpi`          | Installs the host **Intel MPI** launcher (`mpirun`/Hydra). **Only runs when `clam_install_oneapi=true`** — needed for multi-node runs. |
+| `sif_deploy`         | Provides `clam-wrf.sif` on each target: **copies** a prebuilt file, or **builds** it from a container registry reference (`clam_sif_registry`). |
+| `run_scripts_deploy` | Copies the launcher scripts and the `run_scripts*` variants, creates the `GEOG/ BC/ RUNS/` data skeleton, and (optionally) downloads the high-res WPS static data into `GEOG/WPS_GEOG`. |
+
+You need the prebuilt image on the control node first:
+
+```bash
+./container/build_sif.sh             # from the repo root; produces clam-wrf.sif
+```
+
+```bash
+# Install Apptainer + deploy the SIF and run scripts to all hosts:
+ansible-playbook site.yml
+
+# Multi-node hosts: also install the host Intel MPI launcher (same release as
+# the image) so run_multinode.sh can drive mpirun across nodes:
+ansible-playbook site.yml -e clam_install_oneapi=true
+
+# Point at a SIF that is not at the repo root, and use the data volume:
+ansible-playbook site.yml \
+  -e clam_sif_src=/mnt/data1/clam-wrf.sif \
+  -e clam_deploy_dir=/opt/clam \
+  -e clam_data_dir=/data/clam
+
+# Build the SIF ON THE TARGET from a container registry instead of copying it:
+ansible-playbook site.yml -e clam_sif_registry=docker://ghcr.io/org/clam-wrf:latest
+```
+
+Tags: `--tags apptainer` (Apptainer only), `--tags oneapi` (host Intel MPI
+only), `--tags deploy` (copy SIF + scripts only), `--tags geog` /
+`--skip-tags geog` (the WPS static-data download).
+
+**Single node vs. multi node.** Single-node runs need **only Apptainer** —
+everything the model links against is baked into the SIF; leave
+`clam_install_oneapi=false` (default). Multi-node runs use
+[`run_multinode.sh`](../container/run_multinode.sh), which launches `mpirun`
+**on the host**, so multi-node hosts also need the host Intel MPI launcher of
+the **same release as the image** (`clam_install_oneapi=true`; pin with
+`intel_mpi_version`, default `2026.0`).
+
+### Providing the SIF: copy vs. registry build
+
+`sif_deploy` has two mutually exclusive modes: **copy (default)** when
+`clam_sif_registry` is empty (a prebuilt SIF at `clam_sif_src` is copied to
+each target), or **build from a registry** when `clam_sif_registry` is set
+(`apptainer build` runs on each target; `clam_sif_src` is ignored). For a
+private registry set `clam_registry_username` and pass the password
+non-interactively via `-e clam_registry_password=…` or an encrypted
+`-e @vault.yml` (the build task runs with `no_log`).
+
+### Container-mode variables
+
+Most are in [`group_vars/all.yml`](group_vars/all.yml); the `clam_geog_*`
+variables are [`run_scripts_deploy`](roles/run_scripts_deploy/defaults/main.yml)
+role defaults.
+
+| Variable            | Meaning                                                      | Default |
+|---------------------|--------------------------------------------------------------|---------|
+| `clam_sif_src`      | SIF path on the **control node** (copy mode)                 | `../clam-wrf.sif` |
+| `clam_sif_dest`     | SIF path on the **target**                                   | `{{ clam_deploy_dir }}/clam-wrf.sif` |
+| `clam_sif_registry` | Build the SIF on the target from this registry ref; empty = copy | `""` |
+| `clam_sif_force_build` | Rebuild from the registry even if the SIF already exists   | `false` |
+| `clam_registry_username` / `clam_registry_password` | Credentials for a **private** registry (registry build only) | `""` |
+| `clam_deploy_dir`   | Where launcher scripts + run_scripts land on the target      | `~/clam-ewc` |
+| `clam_data_dir`     | Host dir bound into the container at `/data` (`GEOG/BC/RUNS`) | `~/clam-data` |
+| `clam_download_geog` | Download the mandatory high-res WPS static data during deploy (idempotent) | `true` |
+| `clam_run_variants` | Which run-script variants to deploy                          | `default`, `large`, `opendata` |
+| `apptainer_version` | Empty = Ubuntu `apptainer/ppa`; set e.g. `1.3.6` for the GitHub `.deb` | `""` |
+| `clam_install_oneapi` | Install the host Intel MPI launcher (`intel_mpi` role). **Set `true` for multi-node hosts.** | `false` |
+| `intel_mpi_version` | Intel MPI release pinned on the host to match the image      | `2026.0` |
+
+After deployment, stage boundary-condition data under `clam_data_dir` and
+launch from the deploy dir; see [`../container/README.md`](../container/README.md)
+for the full run reference.
+
+---
+
+## Source build mode (`clam_use_container=false`)
+
+Installs exactly the same software stack as [`build_scripts/`](../build_scripts/)
+— Ubuntu build packages, Intel oneAPI, the third-party libraries, WRF, WPS, the
+WPS static geographical data and, optionally, ecCodes. The shell scripts remain
+the reference implementation; use this mode to build several VMs from one place
+and re-run steps idempotently.
+
+The full stack with the high-resolution static data needs roughly 60 GB under
+`arw_root`. The build takes several hours, most of it in the WRF compile — run
+it under `tmux`, `screen` or `nohup`.
+
+```bash
+# The whole build, sample initial and boundary conditions:
+ansible-playbook site.yml -e clam_use_container=false
+
+# On EWC, with the stack on the data volume:
+ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW
+
+# ECMWF open data GRIB2 variant, which also installs ecCodes:
+ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW -e wps_ecmwf_opendata=true
+```
+
+### What maps to what
 
 | Role              | Shell script                                        |
 |-------------------|-----------------------------------------------------|
@@ -65,36 +158,26 @@ your workstation does not interrupt it.
 | `wps_geog`        | `04_download_wps_geog.sh`                           |
 | `eccodes`         | `05_install_eccodes.sh` (optional)                  |
 
-Each role carries tags, so a single step can be run on its own:
+Each role carries tags, so a single step can be run on its own (all combined
+with `-e clam_use_container=false`):
 
 ```bash
-ansible-playbook site.yml --tags packages
-ansible-playbook site.yml --tags oneapi
-ansible-playbook site.yml --tags libs
-ansible-playbook site.yml --tags wrf          # WRF only
-ansible-playbook site.yml --tags wps          # WPS only
-ansible-playbook site.yml --tags wrf_wps      # both
-ansible-playbook site.yml --tags geog
-ansible-playbook site.yml --tags eccodes -e install_eccodes=true
+ansible-playbook site.yml -e clam_use_container=false --tags packages
+ansible-playbook site.yml -e clam_use_container=false --tags oneapi
+ansible-playbook site.yml -e clam_use_container=false --tags libs
+ansible-playbook site.yml -e clam_use_container=false --tags wrf          # WRF only
+ansible-playbook site.yml -e clam_use_container=false --tags wps          # WPS only
+ansible-playbook site.yml -e clam_use_container=false --tags wrf_wps      # both
+ansible-playbook site.yml -e clam_use_container=false --tags geog
+ansible-playbook site.yml -e clam_use_container=false --tags eccodes -e install_eccodes=true
 ```
 
-`--tags wrf` and `--tags wps` both include the shared prerequisite
-checks (libraries, netCDF, compilers) before building their own part.
+`arw_libs` writes the same `${ARW_ROOT}/arw_intel_env.sh` the shell scripts
+write, from
+[`roles/arw_libs/templates/arw_intel_env.sh.j2`](roles/arw_libs/templates/arw_intel_env.sh.j2);
+the `run_scripts/` keep working against it.
 
-The build decisions that the shell scripts arrived at are kept as they
-are: WRF is built `dmpar` with `mpiifx`/`mpiicx`, with `-ip` removed from
-the compiler flags and with `-j 1`; WPS is built serial and linked
-against JasPer 1.900.1 for `ungrib.exe`; HDF5 is built parallel with
-Fortran support. The WRF and WPS `configure` menus are parsed rather
-than answered with a hard-coded number, as in the scripts, so a WRF or
-WPS version bump does not silently select the wrong compiler.
-
-`arw_libs` writes the same `${ARW_ROOT}/arw_intel_env.sh` that the shell
-scripts write, from
-[`roles/arw_libs/templates/arw_intel_env.sh.j2`](roles/arw_libs/templates/arw_intel_env.sh.j2).
-The `run_scripts/` are unchanged and keep working against it.
-
-## Variables
+### Source-mode variables
 
 The main ones, from [`group_vars/all.yml`](group_vars/all.yml):
 
@@ -108,78 +191,48 @@ The main ones, from [`group_vars/all.yml`](group_vars/all.yml):
 | `wps_force_rebuild`   | `false`              | clean and rebuild WPS even if built         |
 
 Versions, download mirrors and the ecCodes options live in each role's
-`defaults/main.yml`. Anything can be overridden per host in the
-inventory or on the command line with `-e`:
+`defaults/main.yml`. The Intel oneAPI offline installer (~20 GB) can be
+provided instead of downloaded via `-e oneapi_installer=…` (on the target) or
+`-e oneapi_installer_src=…` (copied from the control node).
+
+### How it differs from the shell scripts
+
+* **Re-running is cheap.** WRF/WPS skip the configure/compile steps if
+  `wrf.exe`/`ungrib.exe` already exist; use `-e wrf_force_rebuild=true` /
+  `-e wps_force_rebuild=true` for the scripts' always-rebuild behaviour.
+  Switching `wps_ecmwf_opendata` on later forces the WPS rebuild by itself.
+* **Privileges are per task.** The play runs as the ordinary build user; only
+  tasks that need it escalate. Do not run with `--become` for the whole play.
+* **The long steps run with `async`**, so a brief network problem does not kill
+  a two-hour build; the full logs are in
+  `${ARW_ROOT}/WRF/compile_wrf_461_safe.log` and
+  `${ARW_ROOT}/WPS/compile_wps_460.log`.
+* **ecCodes tests** are reported but never fatal (`Test suite:` in the summary).
+
+A download mirror that is down prints a red `fatal: ... ignoring` line and the
+build carries on with the next mirror, as `download_with_fallbacks` in script 02
+does. It is only a real failure if the task *Fail when no mirror provided …*
+follows it.
+
+---
+
+## Checking the playbook
 
 ```bash
-ansible-playbook site.yml -e wrf_version=v4.8.0 -e wps_version=v4.7.0
-ansible-playbook site.yml --tags eccodes -e install_eccodes=true -e eccodes_version=2.48.0
+ansible-playbook -i inventory/hosts.ini site.yml --syntax-check
+ansible-playbook -i inventory/hosts.ini site.yml --list-tasks                        # container (default)
+ansible-playbook -i inventory/hosts.ini site.yml -e clam_use_container=false --list-tasks  # source build
+ansible-lint                     # if installed
 ```
 
-### Air-gapped or slow links
-
-The Intel oneAPI offline installer (around 20 GB) can be provided
-instead of downloaded:
-
-```bash
-# already on the target host
-ansible-playbook site.yml -e oneapi_installer=/data/intel-oneapi-toolkit-2026.0.0.198_offline.sh
-
-# on the control node, copied to the target first
-ansible-playbook site.yml -e oneapi_installer_src=~/Downloads/intel-oneapi-toolkit-2026.0.0.198_offline.sh
-```
-
-## How it differs from the shell scripts
-
-* **Re-running is cheap.** The libraries keep the "is it already
-  installed?" checks of the scripts. WRF and WPS go further: if
-  `wrf.exe`/`ungrib.exe` already exist, the configure and compile steps
-  are skipped instead of always running `./clean -a` and rebuilding. Use
-  `-e wrf_force_rebuild=true` or `-e wps_force_rebuild=true` for the
-  scripts' always-rebuild behaviour. Switching `wps_ecmwf_opendata` on
-  later forces the WPS rebuild by itself, because `rd_grib2.F` changes.
-* **Privileges are per task.** The play runs as the ordinary build user,
-  and only the tasks that need it escalate (`apt`, the oneAPI system
-  install, `make install` into `/usr/local`, `ldconfig`). Everything
-  under `arw_root` therefore belongs to the build user, as with the
-  scripts. Do not run the playbook with `--become` for the whole play.
-* **The long steps run with `async`.** The compiles and the oneAPI
-  installer are started detached and polled, so a brief network problem
-  between the control node and the VM does not kill a two-hour build.
-  Their output appears when the task finishes; the full WRF and WPS
-  compile logs are in `${ARW_ROOT}/WRF/compile_wrf_461_safe.log` and
-  `${ARW_ROOT}/WPS/compile_wps_460.log` as before.
-* **`ulimit -s unlimited`** in `arw_intel_env.sh` is allowed to fail
-  rather than aborting the build, for the tasks that source the file
-  under `set -e`.
-* **ecCodes tests** are reported but never fatal, as in the script. Look
-  for `Test suite:` in the final summary.
-
-## Reading the output
-
-A download mirror that is down prints a red `fatal: ... ...ignoring`
-line and the build carries on with the next mirror, exactly as the
-`download_with_fallbacks` function of script 02 does. It is only a real
-failure if the task *Fail when no mirror provided ...* follows it.
-
-Ansible's default output is terse for long compiles. The nicer YAML
-output needs one collection, which is otherwise not required:
+Ansible's default output is terse for long compiles. The nicer YAML output
+needs one collection, which is otherwise not required:
 
 ```bash
 ansible-galaxy collection install community.general
 ANSIBLE_STDOUT_CALLBACK=community.general.yaml ansible-playbook site.yml
 ```
 
-## Checking the playbook
-
-```bash
-ansible-playbook -i inventory/hosts.ini site.yml --syntax-check
-ansible-playbook -i inventory/hosts.ini site.yml --list-tasks
-ansible-lint                     # if installed
-```
-
-Both pass on ansible-core 2.16.3 (the version Ubuntu 24.04 ships).
-
-`--check` (dry run) is *not* useful for this playbook: the later steps
-inspect files that earlier steps create, so a check run reports failures
-on a machine that has not been built yet.
+`--check` (dry run) is *not* useful for the source build: the later steps
+inspect files that earlier steps create, so a check run reports failures on a
+machine that has not been built yet.
