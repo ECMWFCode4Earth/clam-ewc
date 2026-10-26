@@ -14,11 +14,11 @@ RUN_DATE="${RUN_DATE:-$(date -u +%Y%m%d)}"
 CYC="${CYC:-00}"
 FLENGTH="${FLENGTH:-6}"
 
-# ECMWF open data oper 0p25 is published on a 3 hourly step, which is
+# ECMWF open data oper 0p1 is published on a 3 hourly step, which is
 # also the interval_seconds = 10800 used in namelist.wps.in.
 STEP_HOURS="${STEP_HOURS:-3}"
 
-BASE_URL="https://data.ecmwf.int/forecasts/${RUN_DATE}/${CYC}z/ifs/0p25/oper"
+BASE_URL="https://data.ecmwf.int/forecasts/${RUN_DATE}/${CYC}z/ifs/0p1/oper"
 
 echo "============================================================"
 echo "RUN_DATE    = ${RUN_DATE}"
@@ -131,20 +131,35 @@ STEP=0
 DOWNLOADED=0
 
 while [ "${STEP}" -le "${FLENGTH}" ]; do
-  REMOTE="${RUN_DATE}${CYC}0000-${STEP}h-oper-fc.grib2"
   LOCAL="$(printf '%s_%s_%03dh.grib2' "${RUN_DATE}" "${CYC}" "${STEP}")"
 
   if [ -s "${LOCAL}" ]; then
     echo "Already downloaded: ${LOCAL}"
   else
-    echo "Downloading ${REMOTE} -> ${LOCAL}"
-    if ! download_file "${BASE_URL}/${REMOTE}" "${LOCAL}"; then
-      echo "ERROR: could not download forecast step ${STEP}h:"
-      echo "  ${BASE_URL}/${REMOTE}"
-      echo "ECMWF open data keeps only the most recent days, and the"
-      echo "${CYC}z cycle of ${RUN_DATE} may not be published yet."
-      exit 1
-    fi
+    # Each step is published as two files, surface (sfc) and pressure
+    # levels (pl), which are concatenated into one local file. The
+    # parts end in .part so they stay out of the *.grib2 glob.
+    SFC="${LOCAL%.grib2}.sfc.part"
+    PL="${LOCAL%.grib2}.pl.part"
+
+    for LEVTYPE in sfc pl; do
+      REMOTE="${RUN_DATE}${CYC}0000-${STEP}h-oper-fc-${LEVTYPE}.grib2"
+      PART="${LOCAL%.grib2}.${LEVTYPE}.part"
+
+      echo "Downloading ${REMOTE} -> ${PART}"
+      if ! download_file "${BASE_URL}/${REMOTE}" "${PART}"; then
+        echo "ERROR: could not download forecast step ${STEP}h (${LEVTYPE}):"
+        echo "  ${BASE_URL}/${REMOTE}"
+        echo "ECMWF open data keeps only the most recent days, and the"
+        echo "${CYC}z cycle of ${RUN_DATE} may not be published yet."
+        exit 1
+      fi
+    done
+
+    echo "Merging sfc + pl -> ${LOCAL}"
+    cat "${SFC}" "${PL}" > "${LOCAL}.download"
+    mv "${LOCAL}.download" "${LOCAL}"
+    rm -f "${SFC}" "${PL}"
   fi
 
   # Checked on every run, including for files downloaded earlier.
