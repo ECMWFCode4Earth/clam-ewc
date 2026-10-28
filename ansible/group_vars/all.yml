@@ -53,6 +53,14 @@ wps_ecmwf_opendata: false
 wrf_force_rebuild: false
 wps_force_rebuild: false
 
+# Run-script variants copied to {{ arw_root }} on the target after the
+# build, so a source-built VM can drive a run without the repo checked
+# out there. The shell workflow runs these in place from the repo clone.
+arw_run_variants:
+  - run_scripts
+  - run_scripts_large
+  - run_scripts_opendata
+
 # ------------------------------------------------------------
 # Container-deployment variables (used when clam_use_container=true)
 # ------------------------------------------------------------

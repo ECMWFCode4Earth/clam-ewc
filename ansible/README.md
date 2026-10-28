@@ -177,6 +177,13 @@ write, from
 [`roles/arw_libs/templates/arw_intel_env.sh.j2`](roles/arw_libs/templates/arw_intel_env.sh.j2);
 the `run_scripts/` keep working against it.
 
+Because ansible provisions from the control node (the repo is not checked out
+on the target), the `wrf_wps` role also **copies the run-script variants to
+`$ARW_ROOT`** — `arw_run_variants` (default `run_scripts`, `run_scripts_large`,
+`run_scripts_opendata`) — so a source-built VM can drive a run in place, e.g.
+`cd $ARW_ROOT/run_scripts && ARW_ROOT=$ARW_ROOT ./main_wrf.sh`. The shell
+workflow instead runs them from the repo clone.
+
 ### Source-mode variables
 
 The main ones, from [`group_vars/all.yml`](group_vars/all.yml):
@@ -189,6 +196,7 @@ The main ones, from [`group_vars/all.yml`](group_vars/all.yml):
 | `install_eccodes`     | `wps_ecmwf_opendata` | install ecCodes as well                     |
 | `wrf_force_rebuild`   | `false`              | clean and rebuild WRF even if built         |
 | `wps_force_rebuild`   | `false`              | clean and rebuild WPS even if built         |
+| `arw_run_variants`    | all three            | run-script variants copied to `$ARW_ROOT`   |
 
 Versions, download mirrors and the ecCodes options live in each role's
 `defaults/main.yml`. The Intel oneAPI offline installer (~20 GB) can be
