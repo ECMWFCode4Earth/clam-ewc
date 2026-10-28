@@ -30,8 +30,8 @@ ARG IMPI_VERSION=2021.18
 # Build the ECMWF open-data WPS variant when set to 1. It is a superset of the
 # plain build: same WRF/WPS, plus the ECMWF ungrib patches (rd_grib2.F +
 # Vtable.ECMWF_GRIB2_opendata) needed to decode the open-data GRIB2 files.
-# Left at 0 by default to keep the shipped ungrib behaviour unchanged.
-ARG WRF_OPENDATA=0
+# Defaults to 1 (open-data variant); set 0 for the shipped ungrib behaviour.
+ARG WRF_OPENDATA=1
 
 # -----------------------------------------------------------------------------
 # Stage 1: builder

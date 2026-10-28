@@ -42,10 +42,11 @@ arw_env_file: "{{ arw_root }}/arw_intel_env.sh"
 # Parallel jobs for the third-party libraries (BUILD_JOBS in script 02).
 arw_build_jobs: 4
 
-# Set to true to select the ECMWF open data variant of step 03
+# Select the ECMWF open data variant of step 03
 # (03_install_wrf_wps_openData.sh): ungrib is patched so that it can
-# decode the ECMWF open data GRIB2 files.
-wps_ecmwf_opendata: false
+# decode the ECMWF open data GRIB2 files. Default true; set false for the
+# plain variant that keeps the shipped ungrib behaviour.
+wps_ecmwf_opendata: true
 
 # Existing WRF/WPS executables are left alone by default, so the
 # playbook can be re-run cheaply. The shell scripts always run

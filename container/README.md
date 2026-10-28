@@ -24,9 +24,9 @@ image, so no recompilation is needed at run time.
   unchanged with `ARW_ROOT=/opt/arw`:
   - `build_scripts/02_install_arw_third_party_libs.sh` (zlib, libpng,
     JasPer 1.900.1, HDF5, netCDF-C, netCDF-Fortran)
-  - `build_scripts/03_install_wrf_wps.sh` (WRF dmpar + WPS serial), **or**
-    `build_scripts/03_install_wrf_wps_openData.sh` when built with
-    `--build-arg WRF_OPENDATA=1`. The open-data variant is a superset: same
+  - `build_scripts/03_install_wrf_wps_openData.sh` (the default), **or**
+    `build_scripts/03_install_wrf_wps.sh` when built with
+    `--build-arg WRF_OPENDATA=0`. The open-data variant is a superset: same
     WRF/WPS plus the ECMWF ungrib patches (`rd_grib2.F` +
     `Vtable.ECMWF_GRIB2_opendata`) needed to decode the ECMWF open-data GRIB2.
 - **runtime stage** — installs only the Intel oneAPI **runtime redistributables**
@@ -73,24 +73,24 @@ Run from the **repository root** (the directory containing `build_scripts/`):
 ./container/build_sif.sh
 ```
 
-This produces `clam-wrf.sif`. Override names if needed:
+This produces `clam-wrf.sif` with the **ECMWF open-data** WPS variant (patched
+ungrib) by default. Override names if needed:
 
 ```bash
 IMAGE=clam-wrf:2026.0 SIF=clam-wrf-2026.0.sif ./container/build_sif.sh
 ```
 
-To build the **ECMWF open-data** WPS variant (patched ungrib, see
-[Run-script variants](#run-script-variants)):
+To build the **plain** sample-dataset variant instead (shipped ungrib):
 
 ```bash
-WRF_OPENDATA=1 ./container/build_sif.sh
+WRF_OPENDATA=0 ./container/build_sif.sh
 ```
 
 To build only the Docker image (no SIF):
 
 ```bash
-docker build -f container/Dockerfile -t clam-wrf:latest .                       # plain
-docker build -f container/Dockerfile --build-arg WRF_OPENDATA=1 -t clam-wrf:latest .   # open data
+docker build -f container/Dockerfile -t clam-wrf:latest .                       # open data (default)
+docker build -f container/Dockerfile --build-arg WRF_OPENDATA=0 -t clam-wrf:latest .   # plain
 ```
 
 ## Run-script variants
@@ -102,10 +102,10 @@ run time with `RUN_VARIANT` (see [section 3](#3-runtime-test)):
 |---------------|-------------|-----------------------------|-------------|
 | `default` *(default)* | `run_scripts` | plain sample dataset | plain or open-data |
 | `large` | `run_scripts_large` | larger domain, same sample dataset | plain or open-data |
-| `opendata` | `run_scripts_opendata` | ECMWF open data (IFS 0.25° GRIB2) | **`WRF_OPENDATA=1`** |
+| `opendata` | `run_scripts_opendata` | ECMWF open data (IFS GRIB2) | `WRF_OPENDATA=1` (default) |
 
-The `opendata` variant requires an image built with `WRF_OPENDATA=1` (patched
-ungrib) and **network access at run time**: its `main_wrf.sh` downloads the
+The `opendata` variant requires an image built with the open-data patches
+(`WRF_OPENDATA=1`, the default) and **network access at run time**: its `main_wrf.sh` downloads the
 boundary conditions for the requested cycle and repacks them with ecCodes
 `grib_set` (bundled in the image).
 

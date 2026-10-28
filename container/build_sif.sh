@@ -11,8 +11,8 @@ set -euo pipefail
 #
 # Overridable:
 #   IMAGE=clam-wrf:latest  SIF=clam-wrf.sif  ./container/build_sif.sh
-#   WRF_OPENDATA=1  ./container/build_sif.sh            # build the ECMWF open-data
-#     WPS variant (patched ungrib); default 0 keeps the shipped ungrib
+#   WRF_OPENDATA=0  ./container/build_sif.sh            # build the plain WPS
+#     variant (shipped ungrib); default 1 builds the ECMWF open-data variant
 #   SANDBOX=1  SBX=clam-sbx  ./container/build_sif.sh   # also emit a sandbox dir
 #     (use a sandbox on hosts where the SIF/FUSE mount fails, e.g. broken
 #      fuse-overlayfs: the sandbox runs from a plain directory, no squashfuse)
@@ -20,7 +20,7 @@ set -euo pipefail
 IMAGE="${IMAGE:-clam-wrf:latest}"
 SIF="${SIF:-clam-wrf.sif}"
 SBX="${SBX:-clam-sbx}"
-WRF_OPENDATA="${WRF_OPENDATA:-0}"
+WRF_OPENDATA="${WRF_OPENDATA:-1}"
 
 # Repository root (directory containing build_scripts/ and container/).
 CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

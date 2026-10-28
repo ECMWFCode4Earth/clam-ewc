@@ -136,14 +136,14 @@ The full stack with the high-resolution static data needs roughly 60 GB under
 it under `tmux`, `screen` or `nohup`.
 
 ```bash
-# The whole build, sample initial and boundary conditions:
+# The whole build (open-data variant is the default; also installs ecCodes):
 ansible-playbook site.yml -e clam_use_container=false
 
 # On EWC, with the stack on the data volume:
 ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW
 
-# ECMWF open data GRIB2 variant, which also installs ecCodes:
-ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW -e wps_ecmwf_opendata=true
+# Plain sample-dataset variant instead of the ECMWF open data one:
+ansible-playbook site.yml -e clam_use_container=false -e arw_root=/data/ARW -e wps_ecmwf_opendata=false
 ```
 
 ### What maps to what
@@ -192,7 +192,7 @@ The main ones, from [`group_vars/all.yml`](group_vars/all.yml):
 |-----------------------|----------------------|--------------------------------------------|
 | `arw_root`            | `$HOME/ARW`          | installation root, as `ARW_ROOT`           |
 | `arw_build_jobs`      | `4`                  | `make -j` for the third-party libraries     |
-| `wps_ecmwf_opendata`  | `false`              | patch `ungrib` for ECMWF open data GRIB2    |
+| `wps_ecmwf_opendata`  | `true`               | patch `ungrib` for ECMWF open data GRIB2    |
 | `install_eccodes`     | `wps_ecmwf_opendata` | install ecCodes as well                     |
 | `wrf_force_rebuild`   | `false`              | clean and rebuild WRF even if built         |
 | `wps_force_rebuild`   | `false`              | clean and rebuild WPS even if built         |
