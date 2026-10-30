@@ -1,0 +1,14 @@
+---
+# Destination directory and SIF path on the target. Sources
+# (clam_sif_src) and clam_deploy_dir come from group_vars/all.yml.
+clam_sif_mode: "0644"
+
+# OCI auth passed to `apptainer build` for a private registry (Mode A, building
+# from clam_sif_registry). Built from the credentials in group_vars; an empty
+# dict for public images.
+clam_registry_env: >-
+  {{
+    {'APPTAINER_DOCKER_USERNAME': clam_registry_username,
+     'APPTAINER_DOCKER_PASSWORD': clam_registry_password | default('')}
+    if (clam_registry_username | default('') | length > 0) else {}
+  }}

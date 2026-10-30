@@ -1,0 +1,75 @@
+---
+# Deploy the container launcher scripts, the run_scripts variants, and the
+# host data directory skeleton.
+
+- name: Ensure the deploy container dir exists
+  ansible.builtin.file:
+    path: "{{ clam_deploy_dir }}/container"
+    state: directory
+    mode: "0755"
+
+- name: Deploy the container launcher scripts
+  ansible.builtin.copy:
+    src: "{{ clam_container_src }}/{{ item }}"
+    dest: "{{ clam_deploy_dir }}/container/{{ item }}"
+    mode: "0755"
+  loop: "{{ clam_launcher_scripts }}"
+
+- name: Deploy the run-script variants
+  ansible.builtin.copy:
+    src: "{{ clam_repo_root }}/{{ item }}/"
+    dest: "{{ clam_deploy_dir }}/{{ item }}/"
+    mode: preserve
+  loop: "{{ clam_run_variants }}"
+
+- name: Create the host data directory skeleton (bound at /data)
+  when: clam_create_data_dirs | bool
+  ansible.builtin.file:
+    path: "{{ clam_data_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ clam_data_subdirs }}"
+
+# Equivalent of `ARW_ROOT=$DATA_DIR ./build_scripts/04_download_wps_geog.sh`:
+# fetch the mandatory high-res static data into {{ clam_data_dir }}/GEOG so the
+# container (which symlinks /opt/arw/GEOG -> /data/GEOG) finds WPS_GEOG/.
+- name: Download the WPS static geographical data into the host data dir
+  when:
+    - clam_create_data_dirs | bool
+    - clam_download_geog | bool
+  tags: [geog]
+  block:
+    - name: Check whether the static geographical data is already unpacked
+      ansible.builtin.stat:
+        path: "{{ clam_geog_extracted_dir }}"
+      register: clam_geog_stat
+
+    - name: Download and unpack the mandatory high-res static data
+      when: not clam_geog_stat.stat.exists
+      block:
+        # Several GB over a link that is not always fast. get_url/unarchive
+        # stream the whole transfer in one module run; Ansible waits without
+        # a task timeout.
+        - name: Download the mandatory high resolution static data
+          ansible.builtin.get_url:
+            url: "{{ clam_geog_url }}"
+            dest: "{{ clam_geog_dir }}/{{ clam_geog_url | basename }}"
+            mode: "0644"
+            timeout: 120
+
+        - name: Unpack the static data into GEOG/WPS_GEOG
+          ansible.builtin.unarchive:
+            src: "{{ clam_geog_dir }}/{{ clam_geog_url | basename }}"
+            dest: "{{ clam_geog_dir }}"
+            remote_src: true
+            creates: "{{ clam_geog_extracted_dir }}"
+
+        - name: Remove the downloaded archive
+          ansible.builtin.file:
+            path: "{{ clam_geog_dir }}/{{ clam_geog_url | basename }}"
+            state: absent
+          when: clam_geog_remove_archive | bool
+
+    - name: Report the static data location
+      ansible.builtin.debug:
+        msg: "WPS static geographical data: {{ clam_geog_extracted_dir }}"

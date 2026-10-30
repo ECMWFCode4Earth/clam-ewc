@@ -17,11 +17,22 @@
   ansible.builtin.import_tasks: wps.yml
   tags: [wps]
 
+# The shell build_scripts run the run_scripts in place from the repo clone;
+# ansible provisions from the control node, so copy them to the target.
+- name: Deploy the run-script variants to {{ arw_root }}
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item }}/"
+    dest: "{{ arw_root }}/{{ item }}/"
+    mode: preserve
+  loop: "{{ arw_run_variants }}"
+  tags: [wrf, wps, run_scripts]
+
 - name: Report the installation
   ansible.builtin.debug:
     msg:
       - "WRF and WPS installed successfully."
       - "WRF directory: {{ wrf_dir }}"
       - "WPS directory: {{ wps_dir }}"
+      - "Run scripts: {{ arw_run_variants | map('regex_replace', '^', arw_root ~ '/') | join(', ') }}"
       - "To load the environment: source {{ arw_env_file }}"
   tags: [wrf, wps]

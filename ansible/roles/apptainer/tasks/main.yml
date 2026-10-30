@@ -1,0 +1,76 @@
+---
+# Install Apptainer on Ubuntu 24.04 (rootless-capable), mirroring
+# container/install_apptainer.sh.
+
+- name: Install Apptainer from the official PPA
+  when: apptainer_version | length == 0
+  become: true
+  block:
+    - name: Install prerequisites for add-apt-repository
+      ansible.builtin.apt:
+        name:
+          - software-properties-common
+          - ca-certificates
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Add the Apptainer PPA
+      ansible.builtin.apt_repository:
+        repo: "{{ apptainer_ppa }}"
+        state: present
+        update_cache: true
+
+    - name: Install Apptainer
+      ansible.builtin.apt:
+        name: apptainer
+        state: present
+
+- name: Install a pinned Apptainer from the GitHub .deb
+  when: apptainer_version | length > 0
+  become: true
+  block:
+    - name: Install download prerequisites
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Download the Apptainer .deb
+      ansible.builtin.get_url:
+        url: "{{ apptainer_gh_base }}/v{{ apptainer_version }}/apptainer_{{ apptainer_version }}_amd64.deb"
+        dest: "/tmp/apptainer_{{ apptainer_version }}_amd64.deb"
+        mode: "0644"
+
+    - name: Install the Apptainer .deb
+      ansible.builtin.apt:
+        deb: "/tmp/apptainer_{{ apptainer_version }}_amd64.deb"
+        state: present
+
+# Rootless Apptainer needs unprivileged user namespaces. Ensure a non-zero
+# user.max_user_namespaces (the kernel.unprivileged_userns_clone knob only
+# exists on some kernels, so it is left to the operator).
+- name: Enable unprivileged user namespaces for rootless Apptainer
+  when: apptainer_configure_userns | bool
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-clam-userns.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/apptainer - rootless Apptainer.
+      user.max_user_namespaces = {{ apptainer_max_user_namespaces }}
+  notify: Reload sysctl
+
+- name: Report the installed Apptainer version
+  ansible.builtin.command: apptainer --version
+  register: apptainer_installed_version
+  changed_when: false
+
+- name: Show the installed Apptainer version
+  ansible.builtin.debug:
+    msg: "{{ apptainer_installed_version.stdout }}"

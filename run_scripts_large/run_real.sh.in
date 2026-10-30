@@ -17,7 +17,9 @@ source "$ENV_FILE"
 ln -sf $INPUT_DATA/* .
 rm -f rsl.error.* rsl.out.*
 
-cp namelist.input.clam namelist.input 
+# --remove-destination: $INPUT_DATA/* linked a namelist.input symlink pointing
+# into the read-only image; unlink it so a real file lands in the run dir.
+cp --remove-destination namelist.input.clam namelist.input
 
 REAL_NP="${REAL_NP:-4}"
 
@@ -32,6 +34,13 @@ echo "nproc = $(nproc)"
 lscpu | grep -E '^CPU\(s\)|Thread|Core|Socket|NUMA' || true
 
 mpirun -np "$REAL_NP" $MAIN/real.exe
+
+# Multi-node orchestration (container/run_multinode.sh) sets this to stop after
+# real.exe; the host launcher then runs wrf.exe across nodes.
+if [ "${MULTINODE_HOST_WRF:-0}" = "1" ]; then
+  echo "$0: real.exe done; skipping in-container wrf (host runs multi-node wrf)."
+  exit 0
+fi
 
 bash run_wrf.sh
 #bash run_wrf_multiVMs.sh

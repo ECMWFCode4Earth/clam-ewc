@@ -1,8 +1,9 @@
 # Copy to hosts.ini and edit.
 #
-# The playbook is written for Ubuntu 24.04 EWC virtual machines and is
-# normally run against one VM at a time, but nothing stops it from
-# building several in parallel.
+# The playbook is written for Ubuntu 24.04 EWC virtual machines. It has two
+# modes, selected by clam_use_container (group_vars/all.yml, default true):
+#   true  -> deploy the prebuilt Apptainer image + run scripts (run nodes)
+#   false -> build WRF/WPS from source on the host (build VM)
 
 [arw]
 # A remote EWC VM:
@@ -12,5 +13,20 @@
 # localhost ansible_connection=local
 
 [arw:vars]
+# Pick the mode (default is container deploy):
+# clam_use_container=false     # build WRF/WPS from source instead
+
+# --- Source build (clam_use_container=false) ---
 # Recommended on EWC: put the software stack on the data volume.
 # arw_root=/data/ARW
+
+# --- Container deploy (clam_use_container=true, the default) ---
+# Where to place the deploy dir and the data dir on the target:
+# clam_deploy_dir=/opt/clam
+# clam_data_dir=/data/clam
+# Path to the prebuilt SIF on the Ansible control node:
+# clam_sif_src=/mnt/data1/clam-wrf.sif
+# Or build the SIF on the target from a container registry instead of copying:
+# clam_sif_registry=docker://ghcr.io/org/clam-wrf:latest
+# Multi-node hosts also need the host Intel MPI launcher (install on need):
+# clam_install_oneapi=true

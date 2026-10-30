@@ -1,0 +1,17 @@
+---
+# Equivalent of the environment/options of container/install_apptainer.sh.
+
+# Empty => install the apptainer package from the official Ubuntu PPA.
+# Set to a version (e.g. "1.3.6") to install the official GitHub release .deb.
+apptainer_version: ""
+
+# Official Apptainer PPA (used when apptainer_version is empty).
+apptainer_ppa: "ppa:apptainer/ppa"
+
+# GitHub release base (used when apptainer_version is set).
+apptainer_gh_base: "https://github.com/apptainer/apptainer/releases/download"
+
+# Ensure the sysctl needed for rootless (unprivileged) user namespaces is set.
+# Mirrors the warning emitted by install_apptainer.sh.
+apptainer_configure_userns: true
+apptainer_max_user_namespaces: 15000
