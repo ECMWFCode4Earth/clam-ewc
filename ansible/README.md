@@ -2,7 +2,7 @@
 
 This directory is a single Ansible playbook with **two modes**, selected by
 the boolean `clam_use_container` in
-[`group_vars/all.yml`](group_vars/all.yml) (default `true`):
+[`group_vars/all.yml`](group_vars/all.yml) (default `false`):
 
 | `clam_use_container` | What runs | Roles |
 |----------------------|-----------|-------|
