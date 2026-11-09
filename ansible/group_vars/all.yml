@@ -15,7 +15,7 @@
 # false -> build WRF/WPS from source on the host
 #          (system_packages, intel_oneapi, arw_libs, wrf_wps, wps_geog,
 #           eccodes roles)
-clam_use_container: true
+clam_use_container: false
 
 # ------------------------------------------------------------
 # Source-build variables (used when clam_use_container=false)

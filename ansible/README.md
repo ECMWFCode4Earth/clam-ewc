@@ -6,8 +6,8 @@ the boolean `clam_use_container` in
 
 | `clam_use_container` | What runs | Roles |
 |----------------------|-----------|-------|
-| `true` (default)     | **Deploy** the prebuilt Apptainer image + run scripts to one or more run nodes. Does *not* compile anything. | `apptainer`, `intel_mpi`, `sif_deploy`, `run_scripts_deploy` |
-| `false`              | **Build** WRF/WPS from source — the Ansible version of [`build_scripts/`](../build_scripts/). | `system_packages`, `intel_oneapi`, `arw_libs`, `wrf_wps`, `wps_geog`, `eccodes` |
+| `true`            | **Deploy** the prebuilt Apptainer image + run scripts to one or more run nodes. Does *not* compile anything. | `apptainer`, `intel_mpi`, `sif_deploy`, `run_scripts_deploy` |
+| `false` (default) | **Build** WRF/WPS from source — the Ansible version of [`build_scripts/`](../build_scripts/). | `system_packages`, `intel_oneapi`, `arw_libs`, `wrf_wps`, `wps_geog`, `eccodes` |
 
 The two sets of roles and variables are disjoint; the selector simply gates
 which set runs. Pick the mode on the command line (`-e clam_use_container=…`)
@@ -36,7 +36,7 @@ $EDITOR inventory/hosts.ini
 
 ---
 
-## Container deploy mode (`clam_use_container=true`, default)
+## Container deploy mode (`clam_use_container=true`)
 
 Deploys the **prebuilt** Apptainer image and the run scripts. The heavy build
 happens once when you build the SIF with
@@ -58,20 +58,21 @@ You need the prebuilt image on the control node first:
 
 ```bash
 # Install Apptainer + deploy the SIF and run scripts to all hosts:
-ansible-playbook site.yml
+ansible-playbook site.yml -e clam_use_container=true
 
 # Multi-node hosts: also install the host Intel MPI launcher (same release as
 # the image) so run_multinode.sh can drive mpirun across nodes:
-ansible-playbook site.yml -e clam_install_oneapi=true
+ansible-playbook site.yml -e clam_use_container=true -e clam_install_oneapi=true
 
 # Point at a SIF that is not at the repo root, and use the data volume:
 ansible-playbook site.yml \
+  -e clam_use_container=true \
   -e clam_sif_src=/mnt/data1/clam-wrf.sif \
   -e clam_deploy_dir=/opt/clam \
   -e clam_data_dir=/data/clam
 
 # Build the SIF ON THE TARGET from a container registry instead of copying it:
-ansible-playbook site.yml -e clam_sif_registry=docker://ghcr.io/org/clam-wrf:latest
+ansible-playbook site.yml -e clam_use_container=true -e clam_sif_registry=docker://ghcr.io/org/clam-wrf:latest
 ```
 
 Tags: `--tags apptainer` (Apptainer only), `--tags oneapi` (host Intel MPI
@@ -228,8 +229,8 @@ follows it.
 
 ```bash
 ansible-playbook -i inventory/hosts.ini site.yml --syntax-check
-ansible-playbook -i inventory/hosts.ini site.yml --list-tasks                        # container (default)
-ansible-playbook -i inventory/hosts.ini site.yml -e clam_use_container=false --list-tasks  # source build
+ansible-playbook -i inventory/hosts.ini site.yml --list-tasks                     #source build (default)
+ansible-playbook -i inventory/hosts.ini site.yml -e clam_use_container=true --list-tasks  #container  
 ansible-lint                     # if installed
 ```
 
