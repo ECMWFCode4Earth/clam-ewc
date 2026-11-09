@@ -1,4 +1,4 @@
-# Ansible playbook for CLAM WRF/WPS (build or deploy)
+# Ansible playbook for C-LAM WRF/WPS (build or deploy)
 
 This directory is a single Ansible playbook with **two modes**, selected by
 the boolean `clam_use_container` in

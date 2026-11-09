@@ -1,8 +1,8 @@
-# CLAM WRF/WPS Template for the European Weather Cloud
+# C-LAM WRF/WPS Template for the European Weather Cloud
 
 This repository provides a semi-automated installation workflow for building a reproducible WRF/WPS environment on Ubuntu 24.04 virtual machines, with a primary focus on the European Weather Cloud.
 
-The work is part of the Code for Earth 2026 project **CLAM – Cloud-computing based template for NWP Local Area Model**.
+The work is part of the Code for Earth 2026 project **C-LAM – Cloud-computing based template for NWP Local Area Model**.
 
 The main goal of this repository is to provide a reusable and documented template that helps users install, configure, compile and test a local-area numerical weather prediction environment with WRF and WPS.
 
@@ -429,5 +429,5 @@ The repository will be extended with:
 
 ## Disclaimer
 
-This repository is intended as a practical installation and testing template for the CLAM project. It does not replace the official WRF, WPS, Intel oneAPI, HDF5 or NetCDF documentation. Instead, it provides a tested and reproducible starting point for building WRF/WPS on the European Weather Cloud.
+This repository is intended as a practical installation and testing template for the C-LAM project. It does not replace the official WRF, WPS, Intel oneAPI, HDF5 or NetCDF documentation. Instead, it provides a tested and reproducible starting point for building WRF/WPS on the European Weather Cloud.
 

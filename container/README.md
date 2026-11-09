@@ -1,6 +1,6 @@
-# CLAM WRF/WPS container (Docker → Apptainer)
+# C-LAM WRF/WPS container (Docker → Apptainer)
 
-This folder builds the CLAM **WRF 4.8.0 / WPS 4.7.0** stack as a multi-stage
+This folder builds the C-LAM **WRF 4.8.0 / WPS 4.7.0** stack as a multi-stage
 Docker image and converts it to an **Apptainer** SIF that runs **rootless** on
 the EWC virtual machines and on HPC. The compiled binaries are baked into the
 image, so no recompilation is needed at run time.
