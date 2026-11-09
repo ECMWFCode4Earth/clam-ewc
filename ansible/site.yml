@@ -3,7 +3,7 @@
 # CLAM WRF/WPS - unified Ansible playbook
 #
 # One playbook, two modes selected by the boolean clam_use_container
-# (group_vars/all.yml, default true):
+# (group_vars/all.yml):
 #
 #   clam_use_container=true  -> DEPLOY the prebuilt Apptainer image
 #     Role               | Purpose
